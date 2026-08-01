@@ -1,0 +1,14 @@
+.env
+backend/.venv/
+frontend/node_modules/
+frontend/dist/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+data/app.db
+data/*.db-*
+data/prompt-images/*
+data/reference-images/*
+data/generated-images/*
