@@ -19,10 +19,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login: async (password) => setToken(await requestLogin(password)),
     logout: async () => {
       if (token) {
+        const tokenBeingLoggedOut = token;
         try {
-          await requestLogout(token);
+          await requestLogout(tokenBeingLoggedOut);
         } finally {
-          setToken(null);
+          setToken((currentToken) => (
+            currentToken === tokenBeingLoggedOut ? null : currentToken
+          ));
         }
       }
     },

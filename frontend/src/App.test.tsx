@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
 import App from "./App";
-import { AuthProvider } from "./auth/AuthContext";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
 
 function renderApp() {
   return render(
@@ -19,6 +19,15 @@ function deferred<T>() {
     resolve = resolvePromise;
   });
   return { promise, resolve };
+}
+
+function LoginAgainButton({ password }: { password: string }) {
+  const { login } = useAuth();
+  return (
+    <button type="button" onClick={() => void login(password)}>
+      start newer session
+    </button>
+  );
 }
 
 beforeEach(() => {
@@ -80,6 +89,42 @@ test("does not let a stale welcome 401 clear a later session", async () => {
   expect(await screen.findByText("new session")).toBeInTheDocument();
 
   oldWelcome.resolve(new Response(JSON.stringify({ detail: "Unauthorized" }), { status: 401 }));
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(screen.getByText("new session")).toBeInTheDocument();
+});
+
+test("does not let a delayed old logout clear a later session", async () => {
+  const oldLogout = deferred<Response>();
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-old" }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ message: "old session" }), { status: 200 }))
+    .mockImplementationOnce(() => oldLogout.promise)
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-new" }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ message: "new session" }), { status: 200 }));
+  const user = userEvent.setup();
+  const oldPassword = crypto.randomUUID();
+  const newPassword = crypto.randomUUID();
+
+  render(
+    <AuthProvider>
+      <App />
+      <LoginAgainButton password={newPassword} />
+    </AuthProvider>,
+  );
+  await user.type(screen.getByLabelText("密码"), oldPassword);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  expect(await screen.findByText("old session")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "退出" }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  await user.click(screen.getByRole("button", { name: "start newer session" }));
+  expect(await screen.findByText("new session")).toBeInTheDocument();
+
+  oldLogout.resolve(new Response(null, { status: 204 }));
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
