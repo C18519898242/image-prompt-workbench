@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the first runnable Image Prompt Workbench vertical slice with a FastAPI backend, React/Vite frontend, single-password authentication, one in-memory bearer token, a protected welcome API, logout, Docker Compose support, and a host Nginx deployment example.
+**Goal:** Build the first runnable Image Prompt Workbench vertical slice with a FastAPI backend, React/Vite frontend, single-password authentication, one in-memory bearer token, a protected welcome API, logout, Docker Compose support, and a host Nginx handoff design document.
 
 **Architecture:** Vite serves the React app during development and proxies `/api` to FastAPI. In production, the existing host Nginx serves `frontend/dist/` and reverse-proxies the same-domain `/api/` path to one FastAPI Docker container. FastAPI keeps one active opaque token in process memory, while SQLite and local files are prepared under `data/` but are not used for authentication in this phase.
 
@@ -12,7 +12,7 @@
 
 - 后端：Python FastAPI；后端运行服务器：Uvicorn。
 - 前端：React + Vite，使用 TypeScript；开发环境 Vite 和 FastAPI 分开运行。
-- 生产环境由服务器现有 Nginx 提供 React 静态文件，并把 `/api/` 反向代理到 FastAPI Docker 容器。
+- 生产环境由服务器上的 AI 按设计文档配置现有 Nginx，提供 React 静态文件并把 `/api/` 反向代理到 FastAPI Docker 容器；本仓库不提交这份服务器配置。
 - 生产环境不在 FastAPI 容器中额外运行 Nginx。
 - 前端和后端使用同一个域名，前端 API 地址统一使用相对路径 `/api`，生产环境不配置 CORS。
 - `.env` 中只保存一个共享密码的 Argon2id hash，不保存明文密码。
@@ -27,8 +27,6 @@
 ---
 
 Testing rule: committed tests must never contain a literal password value. Generate test passwords at runtime with `secrets.token_urlsafe(16)` (or an equivalent runtime-only generator), and use a separate generated value for invalid-password cases.
-
-Public deployment rule: the host Nginx example must apply a small per-client-IP rate limit and request-body cap to `POST /api/auth/login`; README must require a strong generated passphrase. This is ingress hardening for the single shared-password gate, not a multi-user account system.
 
 ## File Map
 
@@ -73,11 +71,10 @@ Public deployment rule: the host Nginx example must apply a small per-client-IP 
 ### Deployment and repository files
 
 - Create: `docker-compose.yml` — one backend service bound to `127.0.0.1:8000` with `data/` volume.
-- Create: `deploy/nginx/image-prompt-workbench.conf.example` — same-domain Nginx static-file and `/api/` proxy example.
 - Create: `.env.example` — configuration names without real secrets.
 - Create: `.gitignore` — secrets, caches, build output, SQLite runtime files, and generated images.
 - Create: `data/.gitkeep`, `data/prompt-images/.gitkeep`, `data/reference-images/.gitkeep`, `data/generated-images/.gitkeep` — preserve runtime directories without committing runtime data.
-- Create: `README.md` — local development, password hash generation, tests, Docker, and Nginx deployment instructions.
+- Create: `README.md` — local development, password hash generation, tests, Docker, and Nginx handoff design notes.
 
 ## Interfaces Shared Between Tasks
 

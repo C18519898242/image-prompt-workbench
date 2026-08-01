@@ -56,7 +56,7 @@ npm run build
 
 The build output is `frontend/dist/` and is intentionally not committed.
 
-## Docker Compose and host Nginx deployment
+## Docker Compose and host Nginx handoff
 
 Build the frontend on the host, create the ignored root `.env` as above, then start the backend container from the repository root:
 
@@ -73,19 +73,6 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 
 Compose binds the container only to `127.0.0.1:8000:8000` and mounts `./data:/app/data`. `data/` holds persistent runtime state, including the prepared SQLite and local image directories. Do not commit runtime SQLite files or generated images.
 
-Use the existing host Nginx rather than adding Nginx to the backend image:
-
-1. Copy `deploy/nginx/image-prompt-workbench.conf.example` into a host Nginx file included from the `http {}` context (typically `conf.d/`).
-2. Replace `prompt.example.com` with the deployed domain.
-3. Ensure `root` points to the deployed `frontend/dist/` directory (the example uses `/srv/image-prompt-workbench/frontend/dist`).
-4. Obtain an HTTPS certificate for the deployed domain and replace the example's `ssl_certificate` and `ssl_certificate_key` paths with the actual certificate and private-key paths before reloading Nginx.
-5. Validate the host Nginx configuration and reload Nginx.
-
-Keep the example's `map` and `limit_req_zone` directives outside `server {}` because Nginx requires them in the enclosing `http {}` context. The map uses an empty key for non-POST methods, so the exact `/api/auth/login` location limits only POST requests to 5 per minute per client IP, allows a small burst of 5, and caps each login request body at 1 KiB. The host configuration serves the frontend and reverse-proxies `/api/` to `http://127.0.0.1:8000`, keeping frontend and backend on the same domain. Confirm the deployment through that public domain:
-
-```bash
-# 6. Inspect the public health endpoint through the host Nginx domain
-curl https://prompt.example.com/api/health
-```
+Nginx is managed by the existing server environment and is not configured or packaged by this repository. The handoff design for the server AI is documented in [`docs/superpowers/specs/2026-08-01-foundation-scaffold-design.md`](docs/superpowers/specs/2026-08-01-foundation-scaffold-design.md): use one domain, serve the built `frontend/dist/` at `/`, and forward `/api/` to the backend container. Do not add Nginx to the FastAPI image or treat the example below as a repository-managed server configuration.
 
 Only one Uvicorn worker and one backend replica are supported. Authentication uses one in-memory bearer token, so every backend container restart invalidates existing tokens.
