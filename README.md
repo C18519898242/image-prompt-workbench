@@ -62,7 +62,6 @@ Build the frontend on the host, create the ignored root `.env` as above, then st
 
 ```bash
 # 5. Start the backend container from the repository root
-cd ..
 docker compose up -d --build
 ```
 
