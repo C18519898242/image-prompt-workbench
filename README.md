@@ -52,6 +52,22 @@ http://127.0.0.1:8000/api/health
 
 前端登录时使用运行 `hash-password` 时输入的原始密码。明文密码不会写入 `.env`。
 
+## 创建 SQLite 数据表
+
+建表 SQL 保存在 [`backend/schema.sql`](backend/schema.sql)，包含提示词卡片、分类，以及卡片与分类的多对多关联表。
+
+由于部分 Windows 环境没有安装 `sqlite3` 命令行工具，可以使用 Python 执行这份 SQL：
+
+```powershell
+python -c "import sqlite3; connection=sqlite3.connect('data/app.db'); connection.executescript(open('backend/schema.sql', encoding='utf-8').read()); connection.close()"
+```
+
+如果已安装 `sqlite3` 命令行工具，也可以直接执行：
+
+```powershell
+sqlite3 data/app.db < backend/schema.sql
+```
+
 ## 测试与构建
 
 ```bash
