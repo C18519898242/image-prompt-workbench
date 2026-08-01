@@ -26,6 +26,8 @@
 
 ---
 
+Testing rule: committed tests must never contain a literal password value. Generate test passwords at runtime with `secrets.token_urlsafe(16)` (or an equivalent runtime-only generator), and use a separate generated value for invalid-password cases.
+
 ## File Map
 
 ### Backend
@@ -270,24 +272,29 @@ git commit -m "chore: bootstrap backend configuration"
 Create `backend/tests/test_auth.py`:
 
 ```python
+import secrets
+
 import pytest
 
 from app.auth import AuthState, hash_password, verify_password
 
 
 def test_hash_password_uses_argon2id() -> None:
-    hashed = hash_password("correct horse battery staple")
+    password = secrets.token_urlsafe(16)
+    wrong_password = secrets.token_urlsafe(16)
+    hashed = hash_password(password)
 
     assert hashed.startswith("$argon2id$")
-    assert verify_password("correct horse battery staple", hashed)
-    assert not verify_password("wrong password", hashed)
+    assert verify_password(password, hashed)
+    assert not verify_password(wrong_password, hashed)
 
 
 def test_new_login_replaces_the_active_token() -> None:
-    state = AuthState(hash_password("secret"))
+    password = secrets.token_urlsafe(16)
+    state = AuthState(hash_password(password))
 
-    first_token = state.login("secret")
-    second_token = state.login("secret")
+    first_token = state.login(password)
+    second_token = state.login(password)
 
     assert first_token is not None
     assert second_token is not None
@@ -297,14 +304,17 @@ def test_new_login_replaces_the_active_token() -> None:
 
 
 def test_invalid_password_does_not_create_token() -> None:
-    state = AuthState(hash_password("secret"))
+    password = secrets.token_urlsafe(16)
+    wrong_password = secrets.token_urlsafe(16)
+    state = AuthState(hash_password(password))
 
-    assert state.login("wrong") is None
+    assert state.login(wrong_password) is None
 
 
 def test_logout_only_clears_the_matching_token() -> None:
-    state = AuthState(hash_password("secret"))
-    token = state.login("secret")
+    password = secrets.token_urlsafe(16)
+    state = AuthState(hash_password(password))
+    token = state.login(password)
     assert token is not None
 
     assert state.logout("old-token") is False
@@ -321,6 +331,8 @@ def test_invalid_config_hash_fails_fast() -> None:
 Create `backend/tests/test_cli.py`:
 
 ```python
+import secrets
+
 import pytest
 
 from app import cli
@@ -330,7 +342,8 @@ def test_hash_password_command_prints_argon2_hash(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    answers = iter(["secret", "secret"])
+    password = secrets.token_urlsafe(16)
+    answers = iter([password, password])
     monkeypatch.setattr(cli, "getpass", lambda _prompt: next(answers))
 
     exit_code = cli.main(["hash-password"])
@@ -345,7 +358,7 @@ def test_hash_password_command_rejects_mismatch(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    answers = iter(["secret", "different"])
+    answers = iter([secrets.token_urlsafe(16), secrets.token_urlsafe(16)])
     monkeypatch.setattr(cli, "getpass", lambda _prompt: next(answers))
 
     exit_code = cli.main(["hash-password"])
@@ -525,6 +538,7 @@ Create `backend/tests/conftest.py`:
 
 ```python
 import os
+import secrets
 
 import pytest
 from fastapi.testclient import TestClient
@@ -532,20 +546,28 @@ from fastapi.testclient import TestClient
 from app.auth import hash_password
 from app.config import Settings
 
-os.environ.setdefault("AUTH_PASSWORD_HASH", hash_password("secret"))
+TEST_PASSWORD = secrets.token_urlsafe(16)
+os.environ.setdefault("AUTH_PASSWORD_HASH", hash_password(TEST_PASSWORD))
 
 from app.main import create_app
 
 
 @pytest.fixture
-def client() -> TestClient:
-    settings = Settings(auth_password_hash=hash_password("secret"))
+def password() -> str:
+    return TEST_PASSWORD
+
+
+@pytest.fixture
+def client(password: str) -> TestClient:
+    settings = Settings(auth_password_hash=hash_password(password))
     return TestClient(create_app(settings))
 ```
 
 Create `backend/tests/test_welcome.py`:
 
 ```python
+import secrets
+
 from fastapi.testclient import TestClient
 
 
@@ -563,13 +585,17 @@ def test_welcome_requires_token(client: TestClient) -> None:
 
 
 def test_login_rejects_wrong_password(client: TestClient) -> None:
-    response = client.post("/api/auth/login", json={"password": "wrong"})
+    response = client.post(
+        "/api/auth/login",
+        json={"password": secrets.token_urlsafe(16)},
+    )
 
     assert response.status_code == 401
 
 
-def test_login_welcome_and_logout_flow(client: TestClient) -> None:
-    login = client.post("/api/auth/login", json={"password": "secret"})
+def test_login_welcome_and_logout_flow(client: TestClient, password: str) -> None:
+    login = client.post("/api/auth/login", json={"password": password})
+    assert login.status_code == 200
     token = login.json()["token"]
 
     welcome = client.get(
@@ -585,16 +611,15 @@ def test_login_welcome_and_logout_flow(client: TestClient) -> None:
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    assert login.status_code == 200
     assert welcome.status_code == 200
     assert welcome.json() == {"message": "欢迎使用 Image Prompt Workbench"}
     assert logout.status_code == 204
     assert after_logout.status_code == 401
 
 
-def test_second_login_invalidates_first_token(client: TestClient) -> None:
-    first = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
-    second = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
+def test_second_login_invalidates_first_token(client: TestClient, password: str) -> None:
+    first = client.post("/api/auth/login", json={"password": password}).json()["token"]
+    second = client.post("/api/auth/login", json={"password": password}).json()["token"]
 
     first_response = client.get(
         "/api/welcome",
@@ -609,9 +634,9 @@ def test_second_login_invalidates_first_token(client: TestClient) -> None:
     assert second_response.status_code == 200
 
 
-def test_old_token_cannot_logout_new_token(client: TestClient) -> None:
-    first = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
-    second = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
+def test_old_token_cannot_logout_new_token(client: TestClient, password: str) -> None:
+    first = client.post("/api/auth/login", json={"password": password}).json()["token"]
+    second = client.post("/api/auth/login", json={"password": password}).json()["token"]
 
     old_logout = client.post(
         "/api/auth/logout",
@@ -871,9 +896,10 @@ test("logs in, loads the protected welcome message, and logs out", async () => {
     .mockResolvedValueOnce(new Response(JSON.stringify({ message: "欢迎使用 Image Prompt Workbench" }), { status: 200 }))
     .mockResolvedValueOnce(new Response(null, { status: 204 }));
   const user = userEvent.setup();
+  const password = crypto.randomUUID();
 
   renderApp();
-  await user.type(screen.getByLabelText("密码"), "secret");
+  await user.type(screen.getByLabelText("密码"), password);
   await user.click(screen.getByRole("button", { name: "登录" }));
 
   expect(await screen.findByText("欢迎使用 Image Prompt Workbench")).toBeInTheDocument();
@@ -888,9 +914,10 @@ test("returns to login when the welcome API returns 401", async () => {
     .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-1" }), { status: 200 }))
     .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Unauthorized" }), { status: 401 }));
   const user = userEvent.setup();
+  const password = crypto.randomUUID();
 
   renderApp();
-  await user.type(screen.getByLabelText("密码"), "secret");
+  await user.type(screen.getByLabelText("密码"), password);
   await user.click(screen.getByRole("button", { name: "登录" }));
 
   expect(await screen.findByLabelText("密码")).toBeInTheDocument();
@@ -1381,12 +1408,15 @@ Expected: all frontend tests pass and `dist/` is generated.
 Start the backend with a generated `.env`, then run this smoke script from `backend/`:
 
 ```python
+import secrets
+
 import httpx
 
 
+password = secrets.token_urlsafe(16)
 with httpx.Client(base_url="http://127.0.0.1:8000") as client:
-    first = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
-    second = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
+    first = client.post("/api/auth/login", json={"password": password}).json()["token"]
+    second = client.post("/api/auth/login", json={"password": password}).json()["token"]
     old_response = client.get("/api/welcome", headers={"Authorization": f"Bearer {first}"})
     new_response = client.get("/api/welcome", headers={"Authorization": f"Bearer {second}"})
     assert old_response.status_code == 401
