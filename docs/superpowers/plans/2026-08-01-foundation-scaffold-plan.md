@@ -28,6 +28,8 @@
 
 Testing rule: committed tests must never contain a literal password value. Generate test passwords at runtime with `secrets.token_urlsafe(16)` (or an equivalent runtime-only generator), and use a separate generated value for invalid-password cases.
 
+Public deployment rule: the host Nginx example must apply a small per-client-IP rate limit and request-body cap to `POST /api/auth/login`; README must require a strong generated passphrase. This is ingress hardening for the single shared-password gate, not a multi-user account system.
+
 ## File Map
 
 ### Backend
@@ -926,6 +928,8 @@ test("returns to login when the welcome API returns 401", async () => {
 
 The tests must never write to `localStorage` or `sessionStorage`.
 
+Also cover stale welcome `401` responses, delayed logout completion, and a failed logout followed by retry. These tests must verify that asynchronous results from an older token cannot clear or mask a newer session.
+
 Run from `frontend/`:
 
 ```bash
@@ -999,7 +1003,8 @@ type AuthContextValue = {
   token: string | null;
   login: (password: string) => Promise<void>;
   logout: () => Promise<void>;
-  clearToken: () => void;
+  logoutError: string | null;
+  clearToken: (expectedToken?: string) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -1014,12 +1019,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token) {
         try {
           await requestLogout(token);
-        } finally {
-          setToken(null);
+          setToken((currentToken) => currentToken === token ? null : currentToken);
+        } catch {
+          // Keep the token and expose a retryable error for network/5xx failures.
+          // A 401 may clear only when the captured token is still current.
         }
       }
     },
-    clearToken: () => setToken(null),
+    logoutError: null,
+    clearToken: (expectedToken) => setToken((currentToken) => (
+      expectedToken === undefined || currentToken === expectedToken ? null : currentToken
+    )),
   }), [token]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -1155,7 +1165,7 @@ export default function App() {
 }
 ```
 
-`WelcomeView` receives `token: string` and `LogoutButton` receives no props; both obtain actions from `useAuth()` or their explicit component contract. The welcome text must come from the API response.
+`WelcomeView` receives `token: string` and `LogoutButton` receives no props; both obtain actions from `useAuth()` or their explicit component contract. The welcome text must come from the API response. Every async token-clearing update must be conditional on the captured token. Successful logout and server `401` clear the matching token; network/5xx logout failures keep the session active and expose a retryable error.
 
 - [ ] **Step 5: Add Vite entry, proxy, and minimal styling**
 
@@ -1300,15 +1310,35 @@ services:
 Create `deploy/nginx/image-prompt-workbench.conf.example`:
 
 ```nginx
+# Files in conf.d are included inside Nginx's http {} context.
+map $request_method $login_rate_limit_key {
+    default "";
+    POST $binary_remote_addr;
+}
+limit_req_zone $login_rate_limit_key zone=login:10m rate=5r/m;
+
 server {
     listen 443 ssl;
     server_name prompt.example.com;
+    ssl_certificate /etc/letsencrypt/live/prompt.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/prompt.example.com/privkey.pem;
 
     root /srv/image-prompt-workbench/frontend/dist;
     index index.html;
 
     location / {
         try_files $uri $uri/ /index.html;
+    }
+
+    location = /api/auth/login {
+        client_max_body_size 1k;
+        limit_req zone=login burst=5 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     location /api/ {
@@ -1322,7 +1352,7 @@ server {
 }
 ```
 
-The operator must copy the example into the host Nginx configuration, replace `prompt.example.com` with the actual domain, point `root` to the deployed `frontend/dist/`, enable HTTPS, and reload Nginx. Do not add Nginx to the backend Docker image.
+The operator must copy the example into a host Nginx `conf.d` file included inside the `http {}` context, replace `prompt.example.com` and the example certificate paths with the actual domain and certificate files, point `root` to the deployed `frontend/dist/`, validate the configuration, and reload Nginx. The map and rate-limit zone leave non-POST methods unthrottled and limit only POST login requests to 5 per minute per client IP with a burst of 5; login request bodies are capped at 1 KiB. Do not add Nginx to the backend Docker image.
 
 - [ ] **Step 4: Document the end-to-end deployment**
 
