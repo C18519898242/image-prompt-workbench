@@ -132,3 +132,26 @@ test("does not let a delayed old logout clear a later session", async () => {
 
   expect(screen.getByText("new session")).toBeInTheDocument();
 });
+
+test("keeps the session and offers retry when logout fails", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-1" }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ message: "active session" }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Server error" }), { status: 503 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  const user = userEvent.setup();
+  const password = crypto.randomUUID();
+
+  renderApp();
+  await user.type(screen.getByLabelText("密码"), password);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  expect(await screen.findByText("active session")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "退出" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("退出登录失败，请检查网络后重试");
+  expect(screen.getByText("active session")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "重试退出登录" }));
+  expect(await screen.findByLabelText("密码")).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+});
