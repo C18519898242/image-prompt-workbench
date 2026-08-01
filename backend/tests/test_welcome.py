@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi.testclient import TestClient
 
 
@@ -15,13 +17,17 @@ def test_welcome_requires_token(client: TestClient) -> None:
 
 
 def test_login_rejects_wrong_password(client: TestClient) -> None:
-    response = client.post("/api/auth/login", json={"password": "wrong"})
+    response = client.post(
+        "/api/auth/login",
+        json={"password": secrets.token_urlsafe(16)},
+    )
 
     assert response.status_code == 401
 
 
-def test_login_welcome_and_logout_flow(client: TestClient) -> None:
-    login = client.post("/api/auth/login", json={"password": "secret"})
+def test_login_welcome_and_logout_flow(client: TestClient, password: str) -> None:
+    login = client.post("/api/auth/login", json={"password": password})
+    assert login.status_code == 200
     token = login.json()["token"]
 
     welcome = client.get(
@@ -37,16 +43,15 @@ def test_login_welcome_and_logout_flow(client: TestClient) -> None:
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    assert login.status_code == 200
     assert welcome.status_code == 200
     assert welcome.json() == {"message": "欢迎使用 Image Prompt Workbench"}
     assert logout.status_code == 204
     assert after_logout.status_code == 401
 
 
-def test_second_login_invalidates_first_token(client: TestClient) -> None:
-    first = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
-    second = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
+def test_second_login_invalidates_first_token(client: TestClient, password: str) -> None:
+    first = client.post("/api/auth/login", json={"password": password}).json()["token"]
+    second = client.post("/api/auth/login", json={"password": password}).json()["token"]
 
     first_response = client.get(
         "/api/welcome",
@@ -61,9 +66,9 @@ def test_second_login_invalidates_first_token(client: TestClient) -> None:
     assert second_response.status_code == 200
 
 
-def test_old_token_cannot_logout_new_token(client: TestClient) -> None:
-    first = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
-    second = client.post("/api/auth/login", json={"password": "secret"}).json()["token"]
+def test_old_token_cannot_logout_new_token(client: TestClient, password: str) -> None:
+    first = client.post("/api/auth/login", json={"password": password}).json()["token"]
+    second = client.post("/api/auth/login", json={"password": password}).json()["token"]
 
     old_logout = client.post(
         "/api/auth/logout",
