@@ -68,6 +68,63 @@ AUTH_PASSWORD_HASH='$argon2id$v=19$m=65536,t=3,p=4$...'
 
 `.env` 必须加入 `.gitignore`，仓库只提供不包含真实密码的 `.env.example`。
 
+密码 hash 统一使用 `pwdlib[argon2]` 提供的 `PasswordHash.recommended()`。后端登录校验和命令行生成工具必须共用同一套 hash helper，不能各自实现算法或手动拼接 salt 和参数。
+
+FastAPI 官方安全文档同样使用 `pwdlib[argon2]` 和 `PasswordHash.recommended()` 处理密码 hash：[FastAPI Password Hashing](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/)、[pwdlib](https://pypi.org/project/pwdlib/)。
+
+## Python 密码 hash 命令行工具
+
+脚手架必须提供一个不启动 Web 服务即可运行的 Python 命令行工具，用于生成放入 `.env` 的密码 hash。
+
+### 命令
+
+在 `backend/` 目录下运行：
+
+```bash
+python -m app.cli hash-password
+```
+
+交互行为：
+
+1. 第一次提示输入密码，使用隐藏输入。
+2. 第二次提示确认密码，使用隐藏输入。
+3. 两次输入一致且非空时，在标准输出打印 Argon2id hash。
+4. 不接受 `--password` 等命令行明文密码参数，避免密码出现在 shell 历史和进程列表中。
+5. 工具不自动修改 `.env`，用户手动将输出复制到 `AUTH_PASSWORD_HASH`。
+
+示例：
+
+```text
+$ python -m app.cli hash-password
+Password:
+Confirm password:
+$argon2id$v=19$m=65536,t=3,p=4$...
+```
+
+输出 hash 使用 PHC 字符串格式，包含算法标识、参数和随机 salt。`.env` 中复制时使用单引号包裹：
+
+```env
+AUTH_PASSWORD_HASH='$argon2id$v=19$m=65536,t=3,p=4$...'
+```
+
+命令行工具要求：
+
+- 使用 `getpass.getpass()` 隐藏输入。
+- 空密码、两次密码不一致、输入中断时不输出 hash，并以非零状态码退出。
+- 成功退出码为 `0`。
+- 参数错误或未知子命令退出码为 `2`。
+- 错误信息写到 stderr，不把密码或 hash 写入日志。
+- `python -m app.cli --help` 能显示命令说明。
+
+认证模块提供可复用的纯函数接口：
+
+```python
+hash_password(plain_password: str) -> str
+verify_password(plain_password: str, hashed_password: str) -> bool
+```
+
+Web 登录接口和 `app.cli` 必须调用这两个接口，避免生成和校验逻辑分叉。
+
 ## API 合同
 
 ### 健康检查
@@ -172,11 +229,13 @@ image-prompt-workbench/
 │  │  ├─ main.py
 │  │  ├─ config.py
 │  │  ├─ auth.py
+│  │  ├─ cli.py
 │  │  └─ routes/
 │  │     ├─ auth.py
 │  │     └─ welcome.py
 │  ├─ tests/
 │  │  ├─ test_auth.py
+│  │  ├─ test_cli.py
 │  │  └─ test_welcome.py
 │  ├─ requirements.txt
 │  ├─ Dockerfile
@@ -224,6 +283,13 @@ image-prompt-workbench/
 ```bash
 cd backend
 uvicorn app.main:app --reload --port 8000
+```
+
+首次配置密码 hash：
+
+```bash
+cd backend
+python -m app.cli hash-password
 ```
 
 前端：
@@ -316,6 +382,9 @@ server {
 7. 当前 token logout 后失效。
 8. 旧 token 不能注销新 token。
 9. 重新创建认证服务后旧 token 不再有效。
+10. 命令行工具成功生成以 `$argon2id$` 开头的 hash。
+11. 命令行工具拒绝空密码和不一致的确认密码。
+12. 命令行工具不会把密码作为命令行参数或写入标准错误。
 
 前端和部署验收至少包括：
 
@@ -344,9 +413,11 @@ server {
 
 1. 先创建目录和最小可运行应用。
 2. 先实现后端测试，再实现对应的认证逻辑。
-3. 使用原生 `fetch`，不要为简单请求额外引入 HTTP 客户端依赖。
-4. 不要把 token 写入任何持久化存储。
-5. 不要把 API key 或密码 hash 打印到日志。
-6. 不要实现本文档“本阶段明确不实现”的业务功能。
-7. 更新 `README.md`，写清本地开发、测试、Docker 和 Nginx 部署步骤。
-8. 完成后运行后端测试、前端构建和 `git diff --check`，并报告实际结果。
+3. 使用 `pwdlib[argon2]` 和 `PasswordHash.recommended()` 实现密码 hash。
+4. 将 `python -m app.cli hash-password` 作为独立可执行命令实现并测试。
+5. 使用原生 `fetch`，不要为简单请求额外引入 HTTP 客户端依赖。
+6. 不要把 token 写入任何持久化存储。
+7. 不要把 API key、明文密码或密码 hash 打印到日志。
+8. 不要实现本文档“本阶段明确不实现”的业务功能。
+9. 更新 `README.md`，写清 hash 生成、本地开发、测试、Docker 和 Nginx 部署步骤。
+10. 完成后运行后端测试、命令行工具测试、前端构建和 `git diff --check`，并报告实际结果。
