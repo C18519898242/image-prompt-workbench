@@ -4,6 +4,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 
 import App from "./App";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { WelcomeView } from "./components/WelcomeView";
 
 function renderApp() {
   return render(
@@ -27,6 +28,18 @@ function LoginAgainButton({ password }: { password: string }) {
     <button type="button" onClick={() => void login(password)}>
       start newer session
     </button>
+  );
+}
+
+function CurrentSession({ password }: { password: string }) {
+  const { login, token } = useAuth();
+  return (
+    <>
+      <button type="button" onClick={() => void login(password)}>
+        start current session
+      </button>
+      <output data-testid="current-token">{token ?? "anonymous"}</output>
+    </>
   );
 }
 
@@ -95,6 +108,33 @@ test("does not let a stale welcome 401 clear a later session", async () => {
   });
 
   expect(screen.getByText("new session")).toBeInTheDocument();
+});
+
+test("does not clear the current token for a stale welcome 401", async () => {
+  const oldWelcome = deferred<Response>();
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+    .mockImplementationOnce(() => oldWelcome.promise)
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-new" }), { status: 200 }));
+  const user = userEvent.setup();
+  const password = crypto.randomUUID();
+
+  render(
+    <AuthProvider>
+      <CurrentSession password={password} />
+      <WelcomeView token="token-old" />
+    </AuthProvider>,
+  );
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  await user.click(screen.getByRole("button", { name: "start current session" }));
+  expect(await screen.findByTestId("current-token")).toHaveTextContent("token-new");
+
+  oldWelcome.resolve(new Response(JSON.stringify({ detail: "Unauthorized" }), { status: 401 }));
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(screen.getByTestId("current-token")).toHaveTextContent("token-new");
 });
 
 test("does not let a delayed old logout clear a later session", async () => {

@@ -19,7 +19,7 @@ type AuthContextValue = {
   login: (password: string) => Promise<void>;
   logout: () => Promise<void>;
   logoutError: string | null;
-  clearToken: () => void;
+  clearToken: (expectedToken: string) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -70,7 +70,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [token]);
 
-  const clearToken = useCallback(() => setToken(null), []);
+  const clearToken = useCallback((expectedToken: string) => {
+    setToken((currentToken) => (
+      currentToken === expectedToken ? null : currentToken
+    ));
+  }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
     token,

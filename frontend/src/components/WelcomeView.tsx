@@ -17,7 +17,7 @@ export function WelcomeView({ token }: { token: string }) {
       })
       .catch((requestError: unknown) => {
         if (requestError instanceof ApiError && requestError.status === 401) {
-          if (!cancelled) clearToken();
+          clearToken(token);
           return;
         }
         if (!cancelled) setError("欢迎信息加载失败");
