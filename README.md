@@ -78,9 +78,10 @@ Use the existing host Nginx rather than adding Nginx to the backend image:
 1. Copy `deploy/nginx/image-prompt-workbench.conf.example` into a host Nginx file included from the `http {}` context (typically `conf.d/`).
 2. Replace `prompt.example.com` with the deployed domain.
 3. Ensure `root` points to the deployed `frontend/dist/` directory (the example uses `/srv/image-prompt-workbench/frontend/dist`).
-4. Enable HTTPS for the site and reload Nginx.
+4. Obtain an HTTPS certificate for the deployed domain and replace the example's `ssl_certificate` and `ssl_certificate_key` paths with the actual certificate and private-key paths before reloading Nginx.
+5. Validate the host Nginx configuration and reload Nginx.
 
-Keep the example's `limit_req_zone` directive outside `server {}` because Nginx requires rate-limit zones in the enclosing `http {}` context. The exact `/api/auth/login` location limits requests to 5 per minute per client IP, allows a small burst of 5, and caps each login request body at 1 KiB. The host configuration serves the frontend and reverse-proxies `/api/` to `http://127.0.0.1:8000`, keeping frontend and backend on the same domain. Confirm the deployment through that public domain:
+Keep the example's `map` and `limit_req_zone` directives outside `server {}` because Nginx requires them in the enclosing `http {}` context. The map uses an empty key for non-POST methods, so the exact `/api/auth/login` location limits only POST requests to 5 per minute per client IP, allows a small burst of 5, and caps each login request body at 1 KiB. The host configuration serves the frontend and reverse-proxies `/api/` to `http://127.0.0.1:8000`, keeping frontend and backend on the same domain. Confirm the deployment through that public domain:
 
 ```bash
 # 6. Inspect the public health endpoint through the host Nginx domain

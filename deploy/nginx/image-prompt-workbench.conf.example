@@ -1,10 +1,17 @@
-# Files in conf.d are included inside Nginx's http {} context. Keep this
-# directive outside the server {} block.
-limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+# Files in conf.d are included inside Nginx's http {} context. Keep these
+# directives outside the server {} block.
+map $request_method $login_rate_limit_key {
+    default "";
+    POST $binary_remote_addr;
+}
+
+limit_req_zone $login_rate_limit_key zone=login:10m rate=5r/m;
 
 server {
     listen 443 ssl;
     server_name prompt.example.com;
+    ssl_certificate /etc/letsencrypt/live/prompt.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/prompt.example.com/privkey.pem;
 
     root /srv/image-prompt-workbench/frontend/dist;
     index index.html;
