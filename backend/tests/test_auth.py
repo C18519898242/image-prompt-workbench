@@ -1,4 +1,5 @@
 import pytest
+from argon2 import PasswordHasher, Type
 
 from app.auth import AuthState, hash_password, verify_password
 
@@ -44,3 +45,10 @@ def test_logout_only_clears_the_matching_token() -> None:
 def test_invalid_config_hash_fails_fast() -> None:
     with pytest.raises(ValueError, match="AUTH_PASSWORD_HASH"):
         AuthState("not-an-argon2-hash")
+
+
+def test_argon2i_config_hash_fails_fast() -> None:
+    argon2i_hash = PasswordHasher(type=Type.I).hash("secret")
+
+    with pytest.raises(ValueError, match="AUTH_PASSWORD_HASH"):
+        AuthState(argon2i_hash)

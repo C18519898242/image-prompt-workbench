@@ -24,6 +24,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def validate_password_hash(hashed_password: str) -> None:
+    if not hashed_password.startswith("$argon2id$"):
+        raise ValueError("AUTH_PASSWORD_HASH must be a valid Argon2id hash")
     try:
         PASSWORD_HASH.verify("", hashed_password)
     except UnknownHashError as exc:
