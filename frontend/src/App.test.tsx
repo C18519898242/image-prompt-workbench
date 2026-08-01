@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
@@ -11,6 +11,14 @@ function renderApp() {
       <App />
     </AuthProvider>,
   );
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 beforeEach(() => {
@@ -47,4 +55,35 @@ test("returns to login when the welcome API returns 401", async () => {
   await user.click(screen.getByRole("button", { name: "登录" }));
 
   expect(await screen.findByLabelText("密码")).toBeInTheDocument();
+});
+
+test("does not let a stale welcome 401 clear a later session", async () => {
+  const oldWelcome = deferred<Response>();
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-old" }), { status: 200 }))
+    .mockImplementationOnce(() => oldWelcome.promise)
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-new" }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ message: "new session" }), { status: 200 }));
+  const user = userEvent.setup();
+  const oldPassword = crypto.randomUUID();
+  const newPassword = crypto.randomUUID();
+
+  renderApp();
+  await user.type(screen.getByLabelText("密码"), oldPassword);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+  await user.click(screen.getByRole("button", { name: "退出" }));
+  await user.type(screen.getByLabelText("密码"), newPassword);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  expect(await screen.findByText("new session")).toBeInTheDocument();
+
+  oldWelcome.resolve(new Response(JSON.stringify({ detail: "Unauthorized" }), { status: 401 }));
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(screen.getByText("new session")).toBeInTheDocument();
 });
