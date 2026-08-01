@@ -173,6 +173,46 @@ test("does not let a delayed old logout clear a later session", async () => {
   expect(screen.getByText("new session")).toBeInTheDocument();
 });
 
+test("shows the current session retry error after a stale logout failure", async () => {
+  const oldLogout = deferred<Response>();
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-old" }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ message: "old session" }), { status: 200 }))
+    .mockImplementationOnce(() => oldLogout.promise)
+    .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-new" }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ message: "new session" }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Server error" }), { status: 503 }));
+  const user = userEvent.setup();
+  const oldPassword = crypto.randomUUID();
+  const newPassword = crypto.randomUUID();
+
+  render(
+    <AuthProvider>
+      <App />
+      <LoginAgainButton password={newPassword} />
+    </AuthProvider>,
+  );
+  await user.type(screen.getByLabelText("密码"), oldPassword);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  expect(await screen.findByText("old session")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "退出" }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  await user.click(screen.getByRole("button", { name: "start newer session" }));
+  expect(await screen.findByText("new session")).toBeInTheDocument();
+
+  oldLogout.resolve(new Response(JSON.stringify({ detail: "Server error" }), { status: 503 }));
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "退出" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("退出登录失败，请检查网络后重试");
+  expect(screen.getByText("new session")).toBeInTheDocument();
+});
+
 test("keeps the session and offers retry when logout fails", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(new Response(JSON.stringify({ token: "token-1" }), { status: 200 }))

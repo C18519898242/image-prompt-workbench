@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -27,6 +28,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [logoutFailure, setLogoutFailure] = useState<LogoutFailure | null>(null);
+  const currentTokenRef = useRef<string | null>(token);
+  currentTokenRef.current = token;
 
   const login = useCallback(async (password: string) => {
     setToken(await requestLogin(password));
@@ -36,9 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) return;
 
     const tokenBeingLoggedOut = token;
-    setLogoutFailure((currentFailure) => (
-      currentFailure?.token === tokenBeingLoggedOut ? null : currentFailure
-    ));
+    setLogoutFailure(null);
 
     try {
       await requestLogout(tokenBeingLoggedOut);
@@ -49,6 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         currentFailure?.token === tokenBeingLoggedOut ? null : currentFailure
       ));
     } catch (error) {
+      if (currentTokenRef.current !== tokenBeingLoggedOut) return;
+
       if (error instanceof ApiError && error.status === 401) {
         setToken((currentToken) => (
           currentToken === tokenBeingLoggedOut ? null : currentToken
@@ -59,14 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setLogoutFailure((currentFailure) => (
-        currentFailure === null || currentFailure.token === tokenBeingLoggedOut
-          ? {
-              token: tokenBeingLoggedOut,
-              message: "退出登录失败，请检查网络后重试",
-            }
-          : currentFailure
-      ));
+      setLogoutFailure({
+        token: tokenBeingLoggedOut,
+        message: "退出登录失败，请检查网络后重试",
+      });
     }
   }, [token]);
 
