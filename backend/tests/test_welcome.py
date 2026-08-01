@@ -50,8 +50,13 @@ def test_login_welcome_and_logout_flow(client: TestClient, password: str) -> Non
 
 
 def test_second_login_invalidates_first_token(client: TestClient, password: str) -> None:
-    first = client.post("/api/auth/login", json={"password": password}).json()["token"]
-    second = client.post("/api/auth/login", json={"password": password}).json()["token"]
+    first_login = client.post("/api/auth/login", json={"password": password})
+    assert first_login.status_code == 200
+    first = first_login.json()["token"]
+
+    second_login = client.post("/api/auth/login", json={"password": password})
+    assert second_login.status_code == 200
+    second = second_login.json()["token"]
 
     first_response = client.get(
         "/api/welcome",
@@ -67,8 +72,13 @@ def test_second_login_invalidates_first_token(client: TestClient, password: str)
 
 
 def test_old_token_cannot_logout_new_token(client: TestClient, password: str) -> None:
-    first = client.post("/api/auth/login", json={"password": password}).json()["token"]
-    second = client.post("/api/auth/login", json={"password": password}).json()["token"]
+    first_login = client.post("/api/auth/login", json={"password": password})
+    assert first_login.status_code == 200
+    first = first_login.json()["token"]
+
+    second_login = client.post("/api/auth/login", json={"password": password})
+    assert second_login.status_code == 200
+    second = second_login.json()["token"]
 
     old_logout = client.post(
         "/api/auth/logout",
