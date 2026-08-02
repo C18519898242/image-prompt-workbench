@@ -66,14 +66,9 @@ test("示例图可从第一张切换到第二张", async () => {
     "src",
     "/media/prompt-images/0001-01.jpg",
   );
-  expect(screen.getByAltText("提示词示例图").parentElement).toHaveStyle({
-    aspectRatio: "4 / 3",
-  });
-  expect(screen.getByAltText("提示词示例图")).toHaveStyle({
-    objectFit: "contain",
-    width: "100%",
-    height: "100%",
-  });
+  expect(screen.getByAltText("提示词示例图").parentElement).toHaveClass(
+    "generation-example-image-frame",
+  );
 
   await user.click(screen.getByRole("button", { name: "下一张示例图" }));
 
@@ -110,11 +105,9 @@ test("参考图初始提供四个添加位，并在分批选择时追加预览�
   expect(createObjectURL).toHaveBeenCalledWith(secondFile);
   expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(2);
   expect(screen.getAllByText("添加")).toHaveLength(2);
-  expect(screen.getAllByAltText("生成参考图预览")[0]).toHaveStyle({
-    objectFit: "contain",
-    width: "100%",
-    height: "100%",
-  });
+  expect(
+    screen.getAllByAltText("生成参考图预览")[0].parentElement,
+  ).toHaveClass("generation-reference-image-card");
   expect(
     screen.getAllByAltText("生成参考图预览")[0].parentElement?.parentElement,
   ).toHaveClass("generation-reference-image-grid");

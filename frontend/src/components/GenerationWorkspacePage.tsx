@@ -83,18 +83,11 @@ export function GenerationWorkspacePage({
         <h2 id="example-images-heading">示例图</h2>
         {exampleImage ? (
           <>
-            <div
-              className="generation-example-image-frame generation-example-image-frame--4x3"
-              style={{ aspectRatio: "4 / 3" }}
-            >
-              <img
-                src={exampleImage.url}
-                alt="提示词示例图"
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-              />
+            <div className="generation-example-image-frame">
+              <img src={exampleImage.url} alt="提示词示例图" />
             </div>
-            <p>仅用于理解效果</p>
-            <div>
+            <p className="generation-example-hint">仅用于理解效果</p>
+            <div className="generation-example-controls">
               <button
                 type="button"
                 aria-label="上一张示例图"
@@ -117,13 +110,14 @@ export function GenerationWorkspacePage({
             </div>
           </>
         ) : (
-          <p>暂无示例图</p>
+          <p className="generation-example-hint">暂无示例图</p>
         )}
       </section>
 
-      <label>
-        提示词
+      <div className="generation-prompt-field">
+        <label htmlFor="generation-prompt-editor">提示词</label>
         <textarea
+          id="generation-prompt-editor"
           className="generation-prompt-editor"
           aria-label="提示词"
           value={prompt}
@@ -132,7 +126,7 @@ export function GenerationWorkspacePage({
             setSubmitted(false);
           }}
         />
-      </label>
+      </div>
 
       <section aria-labelledby="reference-images-heading">
         <h2 id="reference-images-heading">生成参考图（可选）</h2>
@@ -154,11 +148,7 @@ export function GenerationWorkspacePage({
         <div className="generation-reference-image-grid">
           {referenceImages.map((image) => (
             <div className="generation-reference-image-card" key={image.url}>
-              <img
-                src={image.url}
-                alt="生成参考图预览"
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-              />
+              <img src={image.url} alt="生成参考图预览" />
               <button
                 type="button"
                 aria-label={`删除生成参考图：${image.name}`}
@@ -169,7 +159,10 @@ export function GenerationWorkspacePage({
             </div>
           ))}
           {Array.from({
-            length: Math.max(1, initialReferenceImageSlots - referenceImages.length),
+            length: Math.max(
+              1,
+              initialReferenceImageSlots - referenceImages.length,
+            ),
           }).map((_, index) => (
             <label
               className="generation-reference-image-add-card"
