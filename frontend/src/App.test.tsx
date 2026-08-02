@@ -368,7 +368,7 @@ test("keeps the session and offers retry when logout fails", async () => {
   expect(fetchMock).toHaveBeenCalled();
 });
 
-test("使用此提示词进入工作台占位并可返回", async () => {
+test("使用此提示词进入工作台并可返回", async () => {
   const card = {
     id: 9,
     title: "测试卡片",
@@ -399,10 +399,9 @@ test("使用此提示词进入工作台占位并可返回", async () => {
   expect(await screen.findByRole("button", { name: "使用此提示词" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "使用此提示词" }));
-  expect(
-    screen.getByText("生成工作台即将推出。本页仅作为「使用此提示词」跳转占位。"),
-  ).toBeInTheDocument();
-  expect(screen.getByText("已选择提示词卡片 ID：9")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "生成工作台" })).toBeInTheDocument();
+  expect(screen.getByText("测试卡片")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("测试提示词")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "返回提示词库" }));
   expect(await screen.findByText("测试卡片")).toBeInTheDocument();

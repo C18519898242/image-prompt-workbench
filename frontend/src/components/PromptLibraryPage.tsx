@@ -27,7 +27,7 @@ type PromptLibraryPageProps = {
   token: string;
   filters: LibraryFilters;
   onFiltersChange: (filters: LibraryFilters) => void;
-  onUsePrompt: (cardId: number) => void;
+  onUsePrompt: (card: PromptCard) => void;
 };
 
 export function filterPromptCards(
@@ -207,7 +207,7 @@ export function PromptLibraryPage({
                 imageUrl={first?.url ?? null}
                 imageFailed={Boolean(failedImages[key])}
                 onImageError={() => markFailed(key)}
-                onUsePrompt={() => onUsePrompt(card.id)}
+                onUsePrompt={() => onUsePrompt(card)}
                 onPreview={() => {
                   setSelectedCardId(card.id);
                   setCurrentIndex(1);

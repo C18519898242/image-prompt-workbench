@@ -1,16 +1,17 @@
 import { useState } from "react";
 
+import type { PromptCard } from "../api";
 import { LogoutButton } from "./LogoutButton";
 import {
   defaultLibraryFilters,
   PromptLibraryPage,
   type LibraryFilters,
 } from "./PromptLibraryPage";
-import { WorkspacePlaceholder } from "./WorkspacePlaceholder";
+import { GenerationWorkspacePage } from "./GenerationWorkspacePage";
 
 export type AppView =
   | { name: "library" }
-  | { name: "workspace"; cardId: number | null };
+  | { name: "workspace"; card: PromptCard };
 
 type AppShellProps = {
   token: string;
@@ -63,12 +64,12 @@ export function AppShell({ token }: AppShellProps) {
             token={token}
             filters={libraryFilters}
             onFiltersChange={setLibraryFilters}
-            onUsePrompt={(cardId) => setView({ name: "workspace", cardId })}
+            onUsePrompt={(card) => setView({ name: "workspace", card })}
           />
         )}
         {view.name === "workspace" && (
-          <WorkspacePlaceholder
-            cardId={view.cardId}
+          <GenerationWorkspacePage
+            card={view.card}
             onBack={() => setView({ name: "library" })}
           />
         )}
