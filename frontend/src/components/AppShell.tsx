@@ -1,13 +1,14 @@
 import { useState } from "react";
 
 import type { PromptCard } from "../api";
+import { GenerationWorkspacePage } from "./GenerationWorkspacePage";
 import { LogoutButton } from "./LogoutButton";
 import {
   defaultLibraryFilters,
   PromptLibraryPage,
   type LibraryFilters,
 } from "./PromptLibraryPage";
-import { GenerationWorkspacePage } from "./GenerationWorkspacePage";
+import { ViewErrorBoundary } from "./ViewErrorBoundary";
 
 export type AppView =
   | { name: "library" }
@@ -59,20 +60,30 @@ export function AppShell({ token }: AppShellProps) {
       </header>
 
       <main className="app-shell-main">
-        {view.name === "library" && (
-          <PromptLibraryPage
-            token={token}
-            filters={libraryFilters}
-            onFiltersChange={setLibraryFilters}
-            onUsePrompt={(card) => setView({ name: "workspace", card })}
-          />
-        )}
-        {view.name === "workspace" && (
-          <GenerationWorkspacePage
-            card={view.card}
-            onBack={() => setView({ name: "library" })}
-          />
-        )}
+        <ViewErrorBoundary
+          onReset={() => setView({ name: "library" })}
+        >
+          {view.name === "library" && (
+            <PromptLibraryPage
+              token={token}
+              filters={libraryFilters}
+              onFiltersChange={setLibraryFilters}
+              onUsePrompt={(card) => {
+                if (!card || typeof card !== "object") {
+                  console.error("onUsePrompt 收到无效卡片", card);
+                  return;
+                }
+                setView({ name: "workspace", card });
+              }}
+            />
+          )}
+          {view.name === "workspace" && view.card && (
+            <GenerationWorkspacePage
+              card={view.card}
+              onBack={() => setView({ name: "library" })}
+            />
+          )}
+        </ViewErrorBoundary>
       </main>
     </div>
   );

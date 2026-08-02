@@ -798,6 +798,29 @@ select:focus-visible {
   font: inherit;
 }
 
+/* —— 视图错误 —— */
+.view-error {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 36rem;
+  margin: 2rem auto;
+  padding: 1.25rem;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.view-error h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.view-error p {
+  margin: 0;
+  word-break: break-word;
+}
+
 /* —— 生成工作台 —— */
 /* 左右两栏各自纵向堆叠，避免「生成参数」被顶到第二行留下大块空白 */
 .generation-workspace {

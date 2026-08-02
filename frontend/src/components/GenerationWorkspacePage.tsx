@@ -34,7 +34,8 @@ export function GenerationWorkspacePage({
   card,
   onBack,
 }: GenerationWorkspacePageProps) {
-  const [prompt, setPrompt] = useState(card.prompt_text);
+  const images = Array.isArray(card.images) ? card.images : [];
+  const [prompt, setPrompt] = useState(card.prompt_text ?? "");
   const [exampleImageIndex, setExampleImageIndex] = useState(0);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [generationParams, setGenerationParams] = useState<GenerationParams>(
@@ -42,7 +43,17 @@ export function GenerationWorkspacePage({
   );
   const [submitted, setSubmitted] = useState(false);
   const referenceImageUrlsRef = useRef<string[]>([]);
-  const exampleImage = card.images[exampleImageIndex];
+  const safeIndex = Math.min(
+    Math.max(exampleImageIndex, 0),
+    Math.max(images.length - 1, 0),
+  );
+  const exampleImage = images[safeIndex];
+
+  useEffect(() => {
+    setPrompt(card.prompt_text ?? "");
+    setExampleImageIndex(0);
+    setSubmitted(false);
+  }, [card.id, card.prompt_text]);
 
   useEffect(() => {
     return () => {
@@ -91,19 +102,25 @@ export function GenerationWorkspacePage({
                 <button
                   type="button"
                   aria-label="上一张示例图"
-                  disabled={exampleImageIndex === 0}
-                  onClick={() => setExampleImageIndex((index) => index - 1)}
+                  disabled={safeIndex === 0}
+                  onClick={() =>
+                    setExampleImageIndex((index) => Math.max(0, index - 1))
+                  }
                 >
                   上一张
                 </button>
                 <span>
-                  {exampleImageIndex + 1} / {card.images.length}
+                  {images.length === 0 ? "0 / 0" : `${safeIndex + 1} / ${images.length}`}
                 </span>
                 <button
                   type="button"
                   aria-label="下一张示例图"
-                  disabled={exampleImageIndex >= card.images.length - 1}
-                  onClick={() => setExampleImageIndex((index) => index + 1)}
+                  disabled={safeIndex >= images.length - 1}
+                  onClick={() =>
+                    setExampleImageIndex((index) =>
+                      Math.min(images.length - 1, index + 1),
+                    )
+                  }
                 >
                   下一张
                 </button>
