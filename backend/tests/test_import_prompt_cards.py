@@ -256,6 +256,58 @@ def test_import_fetches_remote_readme_downloads_images_and_skips_categories(
     assert card.title == "远程卡片"
     assert card.category_ids == ()
     assert card.example_image_path == "prompt-images/0001-01.png"
+    assert card.image_count == 2
     assert (image_dir / "0001-01.png").read_bytes() == b"png-one"
     assert (image_dir / "0001-02.jpg").read_bytes() == b"jpg-two"
     assert category_count == 0
+
+
+def test_import_warns_on_mixed_image_extensions(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    site_dir = tmp_path / "site"
+    image_dir = site_dir / "public" / "images"
+    image_dir.mkdir(parents=True)
+    (image_dir / "one.jpg").write_bytes(b"jpg-one")
+    (image_dir / "two.png").write_bytes(b"png-two")
+    (site_dir / "README_zh.md").write_text(
+        """### No. 1: 混合扩展名卡片
+#### 提示词
+```
+混合提示词
+```
+#### 生成图片
+![图片一](public/images/one.jpg)
+![图片二](public/images/two.png)
+""",
+        encoding="utf-8",
+    )
+
+    handler = functools.partial(SimpleHTTPRequestHandler, directory=site_dir)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        source_url = f"http://127.0.0.1:{server.server_port}/README_zh.md"
+        database_path = tmp_path / "data" / "app.db"
+        database_path.parent.mkdir()
+        connection = sqlite3.connect(database_path)
+        connection.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        connection.close()
+        prompt_image_dir = tmp_path / "data" / "prompt-images"
+
+        with caplog.at_level("WARNING"):
+            imported_count = import_prompt_cards(
+                source_url=source_url,
+                database_path=database_path,
+                image_dir=prompt_image_dir,
+                progress=False,
+            )
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+    assert imported_count == 1
+    assert "第 1 张卡片图片扩展名不一致" in caplog.text

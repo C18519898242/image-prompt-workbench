@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 import re
 import sqlite3
@@ -18,6 +19,8 @@ from urllib.parse import (
 from urllib.request import Request, urlopen
 
 from app.prompt_card_repository import PromptCardRepository
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_SOURCE_URL = (
@@ -105,6 +108,7 @@ def import_prompt_cards(
                 raise ValueError(f"第 {card_number} 张卡片缺少图片")
 
             image_count = len(card.image_urls)
+            _warn_if_mixed_image_extensions(card_number, card.image_urls)
             _log(
                 progress,
                 f"[{card_number}/{total_cards}] {card.title}（{image_count} 张图片）",
@@ -136,6 +140,7 @@ def import_prompt_cards(
                 prompt_text=card.prompt_text,
                 example_image_path=image_paths[0],
                 sort_order=card_number,
+                image_count=image_count,
                 category_ids=(),
             )
             imported_count += 1
@@ -148,6 +153,22 @@ def import_prompt_cards(
 def _log(progress: bool, message: str) -> None:
     if progress:
         print(message, flush=True)
+
+
+def _warn_if_mixed_image_extensions(
+    card_number: int,
+    image_urls: tuple[str, ...],
+) -> None:
+    extensions = {
+        Path(urlparse(image_url).path).suffix.lower()
+        for image_url in image_urls
+    }
+    if len(extensions) > 1:
+        logger.warning(
+            "第 %d 张卡片图片扩展名不一致：%s",
+            card_number,
+            ", ".join(sorted(extensions)),
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
