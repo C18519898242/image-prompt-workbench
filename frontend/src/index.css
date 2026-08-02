@@ -1128,14 +1128,21 @@ select:focus-visible {
   font-weight: 400;
 }
 
+.generation-reference-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
 .generation-reference-image-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
-.generation-reference-image-card,
-.generation-reference-image-add-card {
+.generation-reference-image-card {
   position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
@@ -1144,41 +1151,69 @@ select:focus-visible {
   background: #f3f4f6;
 }
 
-.generation-reference-image-card {
-  display: block;
-}
-
-.generation-reference-image-add-card {
-  display: grid;
-  place-items: center;
-  color: var(--color-text-muted);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.generation-reference-image-add-card:hover {
-  color: var(--color-text);
-  background: #f9fafb;
-}
-
 .generation-reference-image-card img {
   position: absolute;
   inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
 }
 
-.generation-reference-image-grid button {
+.generation-workspace .generation-reference-image-remove {
+  appearance: none;
   position: absolute;
-  right: 0.45rem;
-  bottom: 0.45rem;
+  top: 0.35rem;
+  right: 0.35rem;
   z-index: 1;
-  padding: 0.35rem 0.55rem;
-  background: rgb(255 255 255 / 92%);
-  font-size: 0.8rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgb(17 24 39 / 72%);
+  color: #fff;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.generation-workspace .generation-reference-image-remove:hover {
+  background: rgb(17 24 39 / 88%);
+}
+
+/* 默认只有一条虚线添加栏，不占满 4 个格子 */
+.generation-reference-image-add-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px dashed #d1d5db;
+  border-radius: var(--radius-sm);
+  background: #fafafa;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.generation-reference-image-add-bar:hover {
+  color: var(--color-text);
+  border-color: #9ca3af;
+  background: #f3f4f6;
+}
+
+.generation-reference-image-add-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+  font-weight: 500;
 }
 
 .generation-parameter-fields {

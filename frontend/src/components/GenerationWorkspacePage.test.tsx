@@ -102,7 +102,7 @@ test("点击示例图打开与首页相同的全屏预览并可切换", async ()
   expect(screen.queryByRole("dialog", { name: "大图预览" })).not.toBeInTheDocument();
 });
 
-test("参考图初始提供四个添加位，并在分批选择时追加预览和正确释放对象 URL", async () => {
+test("参考图默认仅一个添加按钮，上传后显示预览并可删除，最多 8 张", async () => {
   const user = userEvent.setup();
   const createObjectURL = vi.fn(
     (file: File) => `blob:${file.name}`,
@@ -119,7 +119,8 @@ test("参考图初始提供四个添加位，并在分批选择时追加预览�
   );
   const input = screen.getByLabelText("上传生成参考图");
 
-  expect(screen.getAllByText("添加")).toHaveLength(4);
+  expect(screen.getByText("可上传最多 8 张参考图，帮助 AI 更好地理解你的需求")).toBeInTheDocument();
+  expect(screen.getAllByText("添加")).toHaveLength(1);
   expect(input).toHaveAttribute("multiple");
 
   await user.upload(input, [firstFile, secondFile]);
@@ -127,13 +128,10 @@ test("参考图初始提供四个添加位，并在分批选择时追加预览�
   expect(createObjectURL).toHaveBeenCalledWith(firstFile);
   expect(createObjectURL).toHaveBeenCalledWith(secondFile);
   expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(2);
-  expect(screen.getAllByText("添加")).toHaveLength(2);
+  expect(screen.getAllByText("添加")).toHaveLength(1);
   expect(
     screen.getAllByAltText("生成参考图预览")[0].parentElement,
   ).toHaveClass("generation-reference-image-card");
-  expect(
-    screen.getAllByAltText("生成参考图预览")[0].parentElement?.parentElement,
-  ).toHaveClass("generation-reference-image-grid");
 
   await user.click(screen.getByRole("button", { name: "删除生成参考图：first.png" }));
   expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(1);

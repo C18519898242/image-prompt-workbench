@@ -29,7 +29,7 @@ const initialGenerationParams: GenerationParams = {
   thinkingLevel: "中等",
 };
 
-const initialReferenceImageSlots = 4;
+const maxReferenceImages = 8;
 
 export function GenerationWorkspacePage({
   card,
@@ -71,15 +71,23 @@ export function GenerationWorkspacePage({
   }, []);
 
   const appendReferenceImages = (files: FileList) => {
-    const nextImages = Array.from(files).map((file) => ({
-      name: file.name,
-      url: URL.createObjectURL(file),
-    }));
-    referenceImageUrlsRef.current = [
-      ...referenceImageUrlsRef.current,
-      ...nextImages.map((image) => image.url),
-    ];
-    setReferenceImages((images) => [...images, ...nextImages]);
+    setReferenceImages((current) => {
+      const remaining = maxReferenceImages - current.length;
+      if (remaining <= 0) {
+        return current;
+      }
+      const nextImages = Array.from(files)
+        .slice(0, remaining)
+        .map((file) => ({
+          name: file.name,
+          url: URL.createObjectURL(file),
+        }));
+      referenceImageUrlsRef.current = [
+        ...referenceImageUrlsRef.current,
+        ...nextImages.map((image) => image.url),
+      ];
+      return [...current, ...nextImages];
+    });
   };
 
   const removeReferenceImage = (url: string) => {
@@ -230,8 +238,14 @@ export function GenerationWorkspacePage({
       </div>
 
       <div className="generation-workspace-right">
-        <section aria-labelledby="reference-images-heading">
+        <section
+          className="generation-reference-section"
+          aria-labelledby="reference-images-heading"
+        >
           <h2 id="reference-images-heading">生成参考图（可选）</h2>
+          <p className="generation-reference-hint">
+            可上传最多 {maxReferenceImages} 张参考图，帮助 AI 更好地理解你的需求
+          </p>
           <input
             id="generation-reference-image-input"
             aria-label="上传生成参考图"
@@ -247,34 +261,37 @@ export function GenerationWorkspacePage({
               event.target.value = "";
             }}
           />
-          <div className="generation-reference-image-grid">
-            {referenceImages.map((image) => (
-              <div className="generation-reference-image-card" key={image.url}>
-                <img src={image.url} alt="生成参考图预览" />
-                <button
-                  type="button"
-                  aria-label={`删除生成参考图：${image.name}`}
-                  onClick={() => removeReferenceImage(image.url)}
+          {referenceImages.length > 0 && (
+            <div className="generation-reference-image-grid">
+              {referenceImages.map((image) => (
+                <div
+                  className="generation-reference-image-card"
+                  key={image.url}
                 >
-                  删除生成参考图
-                </button>
-              </div>
-            ))}
-            {Array.from({
-              length: Math.max(
-                1,
-                initialReferenceImageSlots - referenceImages.length,
-              ),
-            }).map((_, index) => (
-              <label
-                className="generation-reference-image-add-card"
-                htmlFor="generation-reference-image-input"
-                key={`reference-image-add-${index}`}
-              >
-                添加
-              </label>
-            ))}
-          </div>
+                  <img src={image.url} alt="生成参考图预览" />
+                  <button
+                    type="button"
+                    className="generation-reference-image-remove"
+                    aria-label={`删除生成参考图：${image.name}`}
+                    onClick={() => removeReferenceImage(image.url)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {referenceImages.length < maxReferenceImages && (
+            <label
+              className="generation-reference-image-add-bar"
+              htmlFor="generation-reference-image-input"
+            >
+              <span className="generation-reference-image-add-icon" aria-hidden="true">
+                +
+              </span>
+              添加
+            </label>
+          )}
         </section>
 
         <section aria-labelledby="generation-parameters-heading">
