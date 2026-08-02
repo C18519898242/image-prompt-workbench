@@ -822,8 +822,7 @@ select:focus-visible {
   line-height: 1.3;
 }
 
-.generation-workspace > h1 + p,
-.generation-workspace > button:last-of-type + p {
+.generation-workspace > h1 + p {
   margin: -0.55rem 0 0;
   color: var(--color-text-muted);
 }
@@ -886,8 +885,7 @@ select:focus-visible {
   outline-offset: 2px;
 }
 
-.generation-workspace button,
-.generation-workspace > section[aria-labelledby="reference-images-heading"] > label {
+.generation-workspace button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -905,14 +903,6 @@ select:focus-visible {
 .generation-workspace button:disabled {
   opacity: 0.65;
   cursor: not-allowed;
-}
-
-.generation-workspace > button:last-of-type {
-  grid-column: 1 / -1;
-  justify-self: end;
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-primary-text);
 }
 
 .generation-workspace > section[aria-labelledby="example-images-heading"] {
@@ -948,16 +938,31 @@ select:focus-visible {
 
 .generation-reference-image-grid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
-.generation-reference-image-grid > div {
+.generation-reference-image-card,
+.generation-reference-image-add-card {
   position: relative;
+  display: grid;
+  place-items: center;
   aspect-ratio: 4 / 3;
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: #f3f4f6;
+}
+
+.generation-reference-image-add-card {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.generation-reference-image-add-card:hover {
+  color: var(--color-text);
+  background: #f9fafb;
 }
 
 .generation-reference-image-grid img {
@@ -973,7 +978,7 @@ select:focus-visible {
   font-size: 0.8rem;
 }
 
-.generation-workspace > section[aria-labelledby="generation-parameters-heading"] > div {
+.generation-parameter-fields {
   display: grid;
   gap: 0.75rem;
 }
@@ -981,6 +986,23 @@ select:focus-visible {
 .generation-workspace > section[aria-labelledby="generation-parameters-heading"] label {
   display: grid;
   gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.generation-advanced-parameters {
+  display: none;
+}
+
+.generation-parameters-submit {
+  width: 100% !important;
+  border-color: var(--color-primary) !important;
+  background: var(--color-primary) !important;
+  color: var(--color-primary-text) !important;
+}
+
+.generation-submission-feedback {
+  margin: 0;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
 }
 
@@ -993,12 +1015,7 @@ select:focus-visible {
   .generation-workspace > h1,
   .generation-workspace > p,
   .generation-workspace > section[aria-labelledby],
-  .generation-workspace > label,
-  .generation-workspace > button:last-of-type {
+  .generation-workspace > label {
     grid-column: 1;
-  }
-
-  .generation-workspace > button:last-of-type {
-    justify-self: stretch;
   }
 }

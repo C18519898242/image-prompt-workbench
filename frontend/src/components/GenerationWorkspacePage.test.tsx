@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -84,7 +84,7 @@ test("示例图可从第一张切换到第二张", async () => {
   );
 });
 
-test("参考图支持多张预览、单张删除、替换和卸载时释放对象 URL", async () => {
+test("参考图初始提供四个添加位，并在分批选择时追加预览和正确释放对象 URL", async () => {
   const user = userEvent.setup();
   const createObjectURL = vi.fn(
     (file: File) => `blob:${file.name}`,
@@ -94,19 +94,22 @@ test("参考图支持多张预览、单张删除、替换和卸载时释放对�
   const { unmount } = renderWorkspace();
   const firstFile = new File(["first"], "first.png", { type: "image/png" });
   const secondFile = new File(["second"], "second.png", { type: "image/png" });
-  const replacementFile = new File(
-    ["replacement"],
-    "replacement.png",
+  const thirdFile = new File(
+    ["third"],
+    "third.png",
     { type: "image/png" },
   );
   const input = screen.getByLabelText("上传生成参考图");
 
+  expect(screen.getAllByText("添加")).toHaveLength(4);
+  expect(input).toHaveAttribute("multiple");
+
   await user.upload(input, [firstFile, secondFile]);
 
-  expect(input).toHaveAttribute("multiple");
   expect(createObjectURL).toHaveBeenCalledWith(firstFile);
   expect(createObjectURL).toHaveBeenCalledWith(secondFile);
   expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(2);
+  expect(screen.getAllByText("添加")).toHaveLength(4);
   expect(screen.getAllByAltText("生成参考图预览")[0]).toHaveStyle({
     objectFit: "contain",
     width: "100%",
@@ -114,25 +117,28 @@ test("参考图支持多张预览、单张删除、替换和卸载时释放对�
   });
   expect(
     screen.getAllByAltText("生成参考图预览")[0].parentElement?.parentElement,
-  ).toHaveStyle({
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  });
+  ).toHaveClass("generation-reference-image-grid");
 
   await user.click(screen.getByRole("button", { name: "删除生成参考图：first.png" }));
   expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(1);
   expect(revokeObjectURL).toHaveBeenCalledWith("blob:first.png");
 
-  await user.upload(input, replacementFile);
-  expect(revokeObjectURL).toHaveBeenCalledWith("blob:second.png");
-  expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(1);
-  expect(screen.getByAltText("生成参考图预览")).toHaveAttribute(
+  await user.upload(input, thirdFile);
+  expect(createObjectURL).toHaveBeenCalledWith(thirdFile);
+  expect(revokeObjectURL).not.toHaveBeenCalledWith("blob:second.png");
+  expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(2);
+  expect(screen.getAllByAltText("生成参考图预览")[0]).toHaveAttribute(
     "src",
-    "blob:replacement.png",
+    "blob:second.png",
+  );
+  expect(screen.getAllByAltText("生成参考图预览")[1]).toHaveAttribute(
+    "src",
+    "blob:third.png",
   );
 
   unmount();
-  expect(revokeObjectURL).toHaveBeenCalledWith("blob:replacement.png");
+  expect(revokeObjectURL).toHaveBeenCalledWith("blob:second.png");
+  expect(revokeObjectURL).toHaveBeenCalledWith("blob:third.png");
 });
 
 test("空提示词禁用提交，填写提示词后显示本地提交反馈", async () => {
@@ -150,12 +156,10 @@ test("空提示词禁用提交，填写提示词后显示本地提交反馈", as
   expect(screen.getByText("已创建本地生成任务（演示）")).toBeInTheDocument();
 });
 
-test("高级参数可展开和收起，且不显示随机种子", async () => {
+test("基础参数始终可见且受控，并在切换高级入口后保留选择", async () => {
   const user = userEvent.setup();
   renderWorkspace();
 
-  expect(screen.queryByLabelText("模型")).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "展开高级参数" }));
   expect(screen.getByLabelText("模型")).toBeInTheDocument();
   expect(screen.getByLabelText("比例")).toBeInTheDocument();
   expect(screen.getByLabelText("分辨率")).toBeInTheDocument();
@@ -175,6 +179,29 @@ test("高级参数可展开和收起，且不显示随机种子", async () => {
   expect(screen.getByLabelText("思考级别")).toHaveTextContent("低中等高");
   expect(screen.queryByLabelText(/随机种子/)).not.toBeInTheDocument();
 
+  await user.selectOptions(screen.getByLabelText("比例"), "16:9");
+  await user.selectOptions(screen.getByLabelText("分辨率"), "2K");
+  await user.selectOptions(screen.getByLabelText("生成数量"), "4");
+  await user.selectOptions(screen.getByLabelText("思考级别"), "高");
+  await user.click(screen.getByRole("button", { name: "展开高级参数" }));
   await user.click(screen.getByRole("button", { name: "收起高级参数" }));
-  expect(screen.queryByLabelText("模型")).not.toBeInTheDocument();
+
+  expect(screen.getByLabelText("比例")).toHaveValue("16:9");
+  expect(screen.getByLabelText("分辨率")).toHaveValue("2K");
+  expect(screen.getByLabelText("生成数量")).toHaveValue("4");
+  expect(screen.getByLabelText("思考级别")).toHaveValue("高");
+  expect(screen.queryByLabelText(/随机种子/)).not.toBeInTheDocument();
+});
+
+test("提交按钮和本地反馈位于参数面板内，且使用全宽主按钮样式", async () => {
+  const user = userEvent.setup();
+  renderWorkspace();
+  const parameters = screen.getByRole("region", { name: "生成参数" });
+  const submit = within(parameters).getByRole("button", { name: "开始生成" });
+
+  expect(screen.getAllByRole("button", { name: "开始生成" })).toHaveLength(1);
+  expect(submit).toHaveClass("generation-parameters-submit");
+
+  await user.click(submit);
+  expect(within(parameters).getByText("已创建本地生成任务（演示）")).toBeInTheDocument();
 });

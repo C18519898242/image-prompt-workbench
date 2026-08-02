@@ -12,6 +12,24 @@ type ReferenceImage = {
   url: string;
 };
 
+type GenerationParams = {
+  model: "Nano Banana 2";
+  aspectRatio: "1:1" | "4:3" | "16:9";
+  resolution: "1K" | "2K";
+  quantity: "1" | "2" | "4";
+  thinkingLevel: "低" | "中等" | "高";
+};
+
+const initialGenerationParams: GenerationParams = {
+  model: "Nano Banana 2",
+  aspectRatio: "4:3",
+  resolution: "1K",
+  quantity: "1",
+  thinkingLevel: "中等",
+};
+
+const initialReferenceImageSlots = 4;
+
 export function GenerationWorkspacePage({
   card,
   onBack,
@@ -19,6 +37,9 @@ export function GenerationWorkspacePage({
   const [prompt, setPrompt] = useState(card.prompt_text);
   const [exampleImageIndex, setExampleImageIndex] = useState(0);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+  const [generationParams, setGenerationParams] = useState<GenerationParams>(
+    initialGenerationParams,
+  );
   const [showAdvancedParameters, setShowAdvancedParameters] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const referenceImageUrlsRef = useRef<string[]>([]);
@@ -30,14 +51,16 @@ export function GenerationWorkspacePage({
     };
   }, []);
 
-  const replaceReferenceImages = (files: FileList) => {
-    referenceImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+  const appendReferenceImages = (files: FileList) => {
     const nextImages = Array.from(files).map((file) => ({
       name: file.name,
       url: URL.createObjectURL(file),
     }));
-    referenceImageUrlsRef.current = nextImages.map((image) => image.url);
-    setReferenceImages(nextImages);
+    referenceImageUrlsRef.current = [
+      ...referenceImageUrlsRef.current,
+      ...nextImages.map((image) => image.url),
+    ];
+    setReferenceImages((images) => [...images, ...nextImages]);
   };
 
   const removeReferenceImage = (url: string) => {
@@ -113,32 +136,24 @@ export function GenerationWorkspacePage({
 
       <section aria-labelledby="reference-images-heading">
         <h2 id="reference-images-heading">生成参考图（可选）</h2>
-        <label>
-          上传生成参考图
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(event) => {
-              const files = event.target.files;
-              if (files?.length) {
-                replaceReferenceImages(files);
-              }
-              event.target.value = "";
-            }}
-          />
-        </label>
-        {referenceImages.length > 0 && (
-          <div
-            className="generation-reference-image-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            }}
-          >
-            {referenceImages.map((image) => (
-              <div key={image.url}>
+        <input
+          id="generation-reference-image-input"
+          aria-label="上传生成参考图"
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(event) => {
+            const files = event.target.files;
+            if (files?.length) {
+              appendReferenceImages(files);
+            }
+            event.target.value = "";
+          }}
+        />
+        <div className="generation-reference-image-grid">
+          {referenceImages.map((image) => (
+            <div className="generation-reference-image-card" key={image.url}>
                 <img
                   src={image.url}
                   alt="生成参考图预览"
@@ -151,14 +166,101 @@ export function GenerationWorkspacePage({
                 >
                   删除生成参考图
                 </button>
-              </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+          {Array.from({ length: initialReferenceImageSlots }).map((_, index) => (
+            <label
+              className="generation-reference-image-add-card"
+              htmlFor="generation-reference-image-input"
+              key={`reference-image-add-${index}`}
+            >
+              添加
+            </label>
+          ))}
+        </div>
       </section>
 
       <section aria-labelledby="generation-parameters-heading">
         <h2 id="generation-parameters-heading">生成参数</h2>
+        <div className="generation-parameter-fields">
+          <label>
+            模型
+            <select
+              value={generationParams.model}
+              onChange={(event) =>
+                setGenerationParams((params) => ({
+                  ...params,
+                  model: event.target.value as GenerationParams["model"],
+                }))
+              }
+            >
+              <option value="Nano Banana 2">Nano Banana 2</option>
+            </select>
+          </label>
+          <label>
+            比例
+            <select
+              value={generationParams.aspectRatio}
+              onChange={(event) =>
+                setGenerationParams((params) => ({
+                  ...params,
+                  aspectRatio: event.target.value as GenerationParams["aspectRatio"],
+                }))
+              }
+            >
+              <option value="1:1">1:1</option>
+              <option value="4:3">4:3</option>
+              <option value="16:9">16:9</option>
+            </select>
+          </label>
+          <label>
+            分辨率
+            <select
+              value={generationParams.resolution}
+              onChange={(event) =>
+                setGenerationParams((params) => ({
+                  ...params,
+                  resolution: event.target.value as GenerationParams["resolution"],
+                }))
+              }
+            >
+              <option value="1K">1K</option>
+              <option value="2K">2K</option>
+            </select>
+          </label>
+          <label>
+            生成数量
+            <select
+              value={generationParams.quantity}
+              onChange={(event) =>
+                setGenerationParams((params) => ({
+                  ...params,
+                  quantity: event.target.value as GenerationParams["quantity"],
+                }))
+              }
+            >
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="4">4</option>
+            </select>
+          </label>
+          <label>
+            思考级别
+            <select
+              value={generationParams.thinkingLevel}
+              onChange={(event) =>
+                setGenerationParams((params) => ({
+                  ...params,
+                  thinkingLevel: event.target.value as GenerationParams["thinkingLevel"],
+                }))
+              }
+            >
+              <option value="低">低</option>
+              <option value="中等">中等</option>
+              <option value="高">高</option>
+            </select>
+          </label>
+        </div>
         <button
           type="button"
           aria-expanded={showAdvancedParameters}
@@ -166,57 +268,17 @@ export function GenerationWorkspacePage({
         >
           {showAdvancedParameters ? "收起高级参数" : "展开高级参数"}
         </button>
-        {showAdvancedParameters && (
-          <div>
-            <label>
-              模型
-              <select defaultValue="Nano Banana 2">
-                <option value="Nano Banana 2">Nano Banana 2</option>
-              </select>
-            </label>
-            <label>
-              比例
-              <select defaultValue="4:3">
-                <option value="1:1">1:1</option>
-                <option value="4:3">4:3</option>
-                <option value="16:9">16:9</option>
-              </select>
-            </label>
-            <label>
-              分辨率
-              <select defaultValue="1K">
-                <option value="1K">1K</option>
-                <option value="2K">2K</option>
-              </select>
-            </label>
-            <label>
-              生成数量
-              <select defaultValue="1">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="4">4</option>
-              </select>
-            </label>
-            <label>
-              思考级别
-              <select defaultValue="中等">
-                <option value="低">低</option>
-                <option value="中等">中等</option>
-                <option value="高">高</option>
-              </select>
-            </label>
-          </div>
-        )}
+        {showAdvancedParameters && <div className="generation-advanced-parameters" />}
+        <button
+          className="generation-parameters-submit"
+          type="button"
+          disabled={!prompt.trim()}
+          onClick={() => setSubmitted(true)}
+        >
+          开始生成
+        </button>
+        {submitted && <p className="generation-submission-feedback">已创建本地生成任务（演示）</p>}
       </section>
-
-      <button
-        type="button"
-        disabled={!prompt.trim()}
-        onClick={() => setSubmitted(true)}
-      >
-        开始生成
-      </button>
-      {submitted && <p>已创建本地生成任务（演示）</p>}
     </section>
   );
 }
