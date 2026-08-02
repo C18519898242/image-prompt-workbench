@@ -399,10 +399,10 @@ test("使用此提示词进入工作台并可返回", async () => {
   expect(await screen.findByRole("button", { name: "使用此提示词" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "使用此提示词" }));
-  expect(screen.getByRole("heading", { name: "生成工作台" })).toBeInTheDocument();
-  expect(screen.getByText("测试卡片")).toBeInTheDocument();
+  expect(screen.getByRole("navigation", { name: "面包屑" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "测试卡片" })).toBeInTheDocument();
   expect(screen.getByDisplayValue("测试提示词")).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "返回提示词库" }));
+  await user.click(screen.getByRole("button", { name: "提示词库" }));
   expect(await screen.findByText("测试卡片")).toBeInTheDocument();
 });

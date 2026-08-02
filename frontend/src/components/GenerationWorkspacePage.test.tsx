@@ -45,8 +45,9 @@ function optionValues(label: string) {
 test("显示生成工作台的必要区域，且没有清空或字符数功能", () => {
   renderWorkspace();
 
-  expect(screen.getByRole("heading", { name: "生成工作台" })).toBeInTheDocument();
-  expect(screen.getByText("江南烟雨")).toBeInTheDocument();
+  expect(screen.getByRole("navigation", { name: "面包屑" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "提示词库" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "江南烟雨" })).toBeInTheDocument();
   expect(screen.getByLabelText("提示词")).toHaveValue("水墨山水长卷");
   expect(screen.getByText("示例图")).toBeInTheDocument();
   expect(screen.getByText("1 / 2")).toBeInTheDocument();

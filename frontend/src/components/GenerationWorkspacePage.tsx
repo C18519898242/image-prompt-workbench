@@ -83,11 +83,22 @@ export function GenerationWorkspacePage({
 
   return (
     <section className="generation-workspace">
-      <button type="button" onClick={onBack}>
-        返回提示词库
-      </button>
-      <h1>生成工作台</h1>
-      <p>{card.title}</p>
+      <nav className="generation-workspace-breadcrumb" aria-label="面包屑">
+        <button type="button" className="generation-breadcrumb-link" onClick={onBack}>
+          提示词库
+        </button>
+        <span className="generation-breadcrumb-sep" aria-hidden="true">
+          ›
+        </span>
+        <span className="generation-breadcrumb-current">生成工作台</span>
+        <span className="generation-breadcrumb-sep" aria-hidden="true">
+          ›
+        </span>
+        <span className="generation-breadcrumb-current" title={card.title}>
+          {card.title}
+        </span>
+      </nav>
+      <h1 className="generation-workspace-title">{card.title}</h1>
 
       <div className="generation-workspace-left">
         <section aria-labelledby="example-images-heading">
