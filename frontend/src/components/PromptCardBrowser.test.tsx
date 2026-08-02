@@ -11,6 +11,7 @@ const multiImageCard = {
   prompt_text: "完整提示词内容",
   sort_order: 1,
   category_ids: [] as number[],
+  categories: [] as { id: number; name: string; sort_order: number }[],
   image_count: 2,
   example_image_path: "prompt-images/0001-01.jpg",
   images: [

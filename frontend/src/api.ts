@@ -9,12 +9,19 @@ export type PromptCardImage = {
   url: string;
 };
 
+export type Category = {
+  id: number;
+  name: string;
+  sort_order: number;
+};
+
 export type PromptCard = {
   id: number;
   title: string;
   prompt_text: string;
   sort_order: number;
   category_ids: number[];
+  categories: Category[];
   image_count: number;
   example_image_path: string;
   images: PromptCardImage[];
@@ -63,6 +70,14 @@ export async function getPromptCards(token: string): Promise<PromptCard[]> {
     headers: { Authorization: `Bearer ${token}` },
   });
   const result = await parseResponse<PromptCardListResponse>(response);
+  return result.items;
+}
+
+export async function getCategories(token: string): Promise<Category[]> {
+  const response = await fetch("/api/categories", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const result = await parseResponse<{ items: Category[] }>(response);
   return result.items;
 }
 

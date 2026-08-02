@@ -123,3 +123,57 @@ def test_get_prompt_card_image_requires_token(
 ) -> None:
     response = prompt_card_client.get("/api/prompt-cards/1/images/1")
     assert response.status_code == 401
+
+
+def test_list_categories_requires_auth(prompt_card_client: TestClient) -> None:
+    response = prompt_card_client.get("/api/categories")
+    assert response.status_code == 401
+
+
+def test_list_categories_returns_items(
+    prompt_card_client: TestClient,
+    password: str,
+) -> None:
+    token = _login(prompt_card_client, password)
+    settings = prompt_card_client.app.state.settings
+    connection = sqlite3.connect(settings.database_path)
+    repository = PromptCardRepository(connection)
+    category_id = repository.create_category("风景", sort_order=1)
+    connection.close()
+
+    response = prompt_card_client.get(
+        "/api/categories",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert any(
+        item["id"] == category_id and item["name"] == "风景" for item in body["items"]
+    )
+
+
+def test_list_prompt_cards_includes_categories(
+    prompt_card_client: TestClient,
+    password: str,
+) -> None:
+    token = _login(prompt_card_client, password)
+    settings = prompt_card_client.app.state.settings
+    connection = sqlite3.connect(settings.database_path)
+    repository = PromptCardRepository(connection)
+    category_id = repository.create_category("科技", sort_order=0)
+    card_id = repository.create_prompt_card(
+        title="测试卡",
+        prompt_text="提示词",
+        example_image_path="prompt-images/0001-01.jpg",
+        category_ids=[category_id],
+    )
+    connection.close()
+
+    response = prompt_card_client.get(
+        "/api/prompt-cards",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    item = next(card for card in response.json()["items"] if card["id"] == card_id)
+    assert item["categories"][0]["name"] == "科技"
+    assert category_id in item["category_ids"]

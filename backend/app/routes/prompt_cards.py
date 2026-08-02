@@ -24,12 +24,23 @@ class PromptCardImageItem(BaseModel):
     url: str
 
 
+class CategoryItem(BaseModel):
+    id: int
+    name: str
+    sort_order: int
+
+
+class CategoryListResponse(BaseModel):
+    items: list[CategoryItem]
+
+
 class PromptCardItem(BaseModel):
     id: int
     title: str
     prompt_text: str
     sort_order: int
     category_ids: list[int]
+    categories: list[CategoryItem]
     image_count: int
     example_image_path: str
     images: list[PromptCardImageItem]
@@ -37,6 +48,24 @@ class PromptCardItem(BaseModel):
 
 class PromptCardListResponse(BaseModel):
     items: list[PromptCardItem]
+
+
+@router.get("/categories", response_model=CategoryListResponse)
+def list_categories(
+    request: Request,
+    _: str = Depends(require_token),
+) -> CategoryListResponse:
+    settings = request.app.state.settings
+    connection = sqlite3.connect(settings.database_path)
+    try:
+        repository = PromptCardRepository(connection)
+        items = [
+            CategoryItem(id=category.id, name=category.name, sort_order=category.sort_order)
+            for category in repository.list_categories()
+        ]
+        return CategoryListResponse(items=items)
+    finally:
+        connection.close()
 
 
 @router.get("/prompt-cards", response_model=PromptCardListResponse)
@@ -48,9 +77,19 @@ def list_prompt_cards(
     connection = sqlite3.connect(settings.database_path)
     try:
         repository = PromptCardRepository(connection)
+        category_map = {
+            category.id: CategoryItem(
+                id=category.id,
+                name=category.name,
+                sort_order=category.sort_order,
+            )
+            for category in repository.list_categories()
+        }
         cards = repository.list_prompt_cards()
         return PromptCardListResponse(
-            items=[_to_prompt_card_item(card) for card in cards]
+            items=[
+                _to_prompt_card_item(card, category_map=category_map) for card in cards
+            ]
         )
     finally:
         connection.close()
@@ -109,7 +148,11 @@ def get_prompt_card_image(
     return FileResponse(image_path, media_type=media_type)
 
 
-def _to_prompt_card_item(card: PromptCard) -> PromptCardItem:
+def _to_prompt_card_item(
+    card: PromptCard,
+    *,
+    category_map: dict[int, CategoryItem] | None = None,
+) -> PromptCardItem:
     try:
         refs = build_public_image_refs(card.example_image_path, card.image_count)
     except ValueError:
@@ -119,12 +162,19 @@ def _to_prompt_card_item(card: PromptCard) -> PromptCardItem:
         PromptCardImageItem(index=index, path=path, url=url)
         for index, path, url in refs
     ]
+    resolved_map = category_map or {}
+    categories = [
+        resolved_map[category_id]
+        for category_id in card.category_ids
+        if category_id in resolved_map
+    ]
     return PromptCardItem(
         id=card.id,
         title=card.title,
         prompt_text=card.prompt_text,
         sort_order=card.sort_order,
         category_ids=list(card.category_ids),
+        categories=categories,
         image_count=card.image_count,
         example_image_path=card.example_image_path,
         images=images,
