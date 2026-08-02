@@ -37,12 +37,19 @@
 
 ![生成历史页方案 A](assets/image-prompt-workbench-generation-history-gallery.png)
 
+### 登录页
+
+登录页沿用同一套浅色工作台视觉：白色背景、细灰边框、黑色主按钮和克制的圆角。由于项目是个人使用工具，登录页只保留单密码登录，不增加注册、社交登录或营销入口。
+
+![登录页最终示例](assets/image-prompt-workbench-login.png)
+
 设计稿文件：
 
 - `docs/superpowers/specs/assets/image-prompt-workbench-prompt-library.png`
 - `docs/superpowers/specs/assets/image-prompt-workbench-generation-workspace.png`
 - `docs/superpowers/specs/assets/image-prompt-workbench-generation-history-gallery.png`
 - `docs/superpowers/specs/assets/image-prompt-workbench-long-image-display.png`
+- `docs/superpowers/specs/assets/image-prompt-workbench-login.png`
 
 设计稿只作为视觉和布局基准，不代表最终文案、图片内容或后端接口已经实现。
 
@@ -318,3 +325,11 @@
 - 长图缩略图使用 `contain` 完整显示；大图预览支持按宽度阅读、滚动和缩放
 - 新生成的任务跳转后排在最前面；生成中显示进度状态，完成后自动更新为生成结果
 - 历史页不承担提示词编辑、生成参数编辑或结果页的复杂操作
+
+## 12. 登录入口
+
+- 登录页与主工作台使用同一套浅色视觉语言
+- 页面只提供一个密码输入框和一个黑色“登录”按钮
+- 登录页显示产品名称“Image Prompt Workbench”和“个人图像提示词与生成工作台”说明
+- 不提供注册、社交登录、记住我、营销文案或社区入口
+- 登录失败时在输入框附近显示明确的内联错误提示，不使用无法追溯来源的全局弹窗
