@@ -29,6 +29,7 @@ const initialGenerationParams: GenerationParams = {
   thinkingLevel: "中等",
 };
 
+/** 生成参考图上限（不再使用固定 4 格空槽） */
 const maxReferenceImages = 8;
 
 export function GenerationWorkspacePage({
