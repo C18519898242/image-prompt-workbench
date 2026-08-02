@@ -95,65 +95,70 @@ export function GenerationWorkspacePage({
           {exampleImage ? (
             <>
               <div className="generation-example-image-frame">
-                <img src={exampleImage.url} alt="提示词示例图" />
-                {images.length > 1 && (
-                  <>
-                    <button
-                      type="button"
-                      className="generation-example-nav generation-example-nav-prev"
-                      aria-label="上一张示例图"
-                      disabled={safeIndex === 0}
-                      onClick={(event) => {
-                        setExampleImageIndex((index) => Math.max(0, index - 1));
-                        event.currentTarget.blur();
-                      }}
-                    >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        aria-hidden="true"
+                {/* wrap 仅包住实际图片区域，两侧留白不触发箭头显示 */}
+                <div className="generation-example-image-wrap">
+                  <img src={exampleImage.url} alt="提示词示例图" />
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        className="generation-example-nav generation-example-nav-prev"
+                        aria-label="上一张示例图"
+                        disabled={safeIndex === 0}
+                        onClick={(event) => {
+                          setExampleImageIndex((index) =>
+                            Math.max(0, index - 1),
+                          );
+                          event.currentTarget.blur();
+                        }}
                       >
-                        <path
-                          d="M14.5 5 8 12l6.5 7"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      className="generation-example-nav generation-example-nav-next"
-                      aria-label="下一张示例图"
-                      disabled={safeIndex >= images.length - 1}
-                      onClick={(event) => {
-                        setExampleImageIndex((index) =>
-                          Math.min(images.length - 1, index + 1),
-                        );
-                        event.currentTarget.blur();
-                      }}
-                    >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        aria-hidden="true"
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M14.5 5 8 12l6.5 7"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="generation-example-nav generation-example-nav-next"
+                        aria-label="下一张示例图"
+                        disabled={safeIndex >= images.length - 1}
+                        onClick={(event) => {
+                          setExampleImageIndex((index) =>
+                            Math.min(images.length - 1, index + 1),
+                          );
+                          event.currentTarget.blur();
+                        }}
                       >
-                        <path
-                          d="M9.5 5 16 12l-6.5 7"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                  </>
-                )}
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M9.5 5 16 12l-6.5 7"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <p className="generation-example-hint">仅用于理解效果</p>
             </>

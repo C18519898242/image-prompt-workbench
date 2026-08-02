@@ -66,8 +66,11 @@ test("示例图可从第一张切换到第二张", async () => {
     "/media/prompt-images/0001-01.jpg",
   );
   expect(screen.getByAltText("提示词示例图").parentElement).toHaveClass(
-    "generation-example-image-frame",
+    "generation-example-image-wrap",
   );
+  expect(
+    screen.getByAltText("提示词示例图").parentElement?.parentElement,
+  ).toHaveClass("generation-example-image-frame");
   expect(screen.queryByRole("button", { name: "第 1 张" })).not.toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "下一张示例图" }));

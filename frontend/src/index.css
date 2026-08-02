@@ -940,9 +940,11 @@ select:focus-visible {
   cursor: not-allowed;
 }
 
-/* 示例图：固定 4:3，图片 contain 居中；左右圆形翻页（参考 YouMind） */
+/* 示例图：固定 4:3 外框；内层 wrap 只包住真实图片，留白区不触发箭头 */
 .generation-example-image-frame {
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   aspect-ratio: 4 / 3;
   overflow: hidden;
@@ -951,12 +953,20 @@ select:focus-visible {
   background: #f3f4f6;
 }
 
-.generation-example-image-frame img {
-  position: absolute;
-  inset: 0;
+.generation-example-image-wrap {
+  position: relative;
+  flex: 0 1 auto;
+  max-width: 100%;
+  max-height: 100%;
+  line-height: 0;
+}
+
+.generation-example-image-wrap img {
   display: block;
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
   object-position: center;
 }
@@ -988,8 +998,8 @@ select:focus-visible {
   transition: opacity 0.15s ease, visibility 0.15s ease;
 }
 
-/* 只用 :hover，不用 :focus-within——点第二页后焦点停在按钮上会导致箭头一直显示 */
-.generation-workspace .generation-example-image-frame:hover .generation-example-nav {
+/* 仅悬停真实图片区域（wrap）时显示，两侧留白不触发 */
+.generation-workspace .generation-example-image-wrap:hover .generation-example-nav {
   opacity: 1 !important;
   visibility: visible;
   pointer-events: auto;
@@ -1001,7 +1011,7 @@ select:focus-visible {
 }
 
 .generation-workspace
-  .generation-example-image-frame:hover
+  .generation-example-image-wrap:hover
   .generation-example-nav:disabled {
   opacity: 0.35 !important;
   visibility: visible;
@@ -1010,11 +1020,11 @@ select:focus-visible {
 }
 
 .generation-example-nav-prev {
-  left: 0.65rem;
+  left: 0.5rem;
 }
 
 .generation-example-nav-next {
-  right: 0.65rem;
+  right: 0.5rem;
 }
 
 .generation-example-hint {
