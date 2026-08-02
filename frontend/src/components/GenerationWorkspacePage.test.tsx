@@ -49,6 +49,7 @@ test("显示生成工作台的必要区域，且没有清空或字符数功能",
   expect(screen.getByText("江南烟雨")).toBeInTheDocument();
   expect(screen.getByLabelText("提示词")).toHaveValue("水墨山水长卷");
   expect(screen.getByText("示例图")).toBeInTheDocument();
+  expect(screen.getByText("1 / 2")).toBeInTheDocument();
   expect(screen.getByText("生成参考图（可选）")).toBeInTheDocument();
   expect(screen.getByText("仅用于理解效果")).toBeInTheDocument();
   expect(screen.getByText("生成参数")).toBeInTheDocument();

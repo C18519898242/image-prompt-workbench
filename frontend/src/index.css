@@ -940,6 +940,19 @@ select:focus-visible {
   cursor: not-allowed;
 }
 
+.generation-example-heading-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.generation-example-page-count {
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
 /* 示例图：固定 4:3 框 + contain 居中留白（原效果） */
 .generation-example-image-frame {
   position: relative;

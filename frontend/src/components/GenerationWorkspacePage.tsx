@@ -91,7 +91,14 @@ export function GenerationWorkspacePage({
 
       <div className="generation-workspace-left">
         <section aria-labelledby="example-images-heading">
-          <h2 id="example-images-heading">示例图</h2>
+          <div className="generation-example-heading-row">
+            <h2 id="example-images-heading">示例图</h2>
+            {images.length > 0 && (
+              <span className="generation-example-page-count">
+                {safeIndex + 1} / {images.length}
+              </span>
+            )}
+          </div>
           {exampleImage ? (
             <>
               <div className="generation-example-image-frame">
