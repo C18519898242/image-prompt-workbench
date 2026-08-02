@@ -407,6 +407,7 @@ select:focus-visible {
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: #f3f4f6;
+  cursor: pointer;
 }
 
 .prompt-card-image-frame--4x3 {
