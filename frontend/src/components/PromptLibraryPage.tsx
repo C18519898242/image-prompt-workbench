@@ -237,6 +237,21 @@ export function PromptLibraryPage({
             setSelectedCardId(null);
             setCurrentIndex(1);
           }}
+          onDownload={() => {
+            const image = selectedCard.images.find(
+              (item) => item.index === currentIndex,
+            );
+            if (!image) {
+              return;
+            }
+            const link = document.createElement("a");
+            link.href = image.url;
+            link.download = image.path.split("/").pop() || `${selectedCard.title}.jpg`;
+            link.rel = "noopener";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          }}
           onPrev={() => setCurrentIndex((index) => Math.max(1, index - 1))}
           onNext={() =>
             setCurrentIndex((index) =>

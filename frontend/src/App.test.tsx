@@ -58,6 +58,7 @@ function jsonResponse(body: unknown, status = 200) {
 function mockAuthedApis(options?: {
   cards?: Response | (() => Promise<Response>);
   categories?: Response;
+  histories?: Response | (() => Promise<Response>);
 }) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
@@ -73,6 +74,12 @@ function mockAuthedApis(options?: {
         return options.cards();
       }
       return options?.cards ?? emptyCardsResponse();
+    }
+    if (url.includes("/api/generation-history") && method === "GET") {
+      if (typeof options?.histories === "function") {
+        return options.histories();
+      }
+      return options?.histories ?? emptyCardsResponse();
     }
     if (url.includes("/api/auth/logout") && method === "POST") {
       return new Response(null, { status: 204 });
@@ -99,14 +106,32 @@ test("logs in, shows prompt library navigation, and logs out", async () => {
 
   expect(await screen.findByRole("navigation")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "提示词库" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "历史" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "生成工作台" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "历史" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "☆ 收藏" })).not.toBeInTheDocument();
   expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "退出" }));
   expect(screen.getByLabelText("密码")).toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalled();
+});
+
+test("top navigation jumps to generation history page", async () => {
+  mockAuthedApis();
+  const user = userEvent.setup();
+  const password = crypto.randomUUID();
+
+  renderApp();
+  await user.type(screen.getByLabelText("密码"), password);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "历史" }));
+  expect(await screen.findByRole("heading", { name: "生成历史" })).toBeInTheDocument();
+  expect(screen.getByText("暂无生成历史")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "提示词库" }));
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 });
 
 test("returns to login when the prompt cards API returns 401", async () => {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { PromptCard } from "../api";
+import { GenerationHistoryPage } from "./GenerationHistoryPage";
 import { GenerationWorkspacePage } from "./GenerationWorkspacePage";
 import { LogoutButton } from "./LogoutButton";
 import {
@@ -12,7 +13,8 @@ import { ViewErrorBoundary } from "./ViewErrorBoundary";
 
 export type AppView =
   | { name: "library" }
-  | { name: "workspace"; card: PromptCard };
+  | { name: "workspace"; card: PromptCard }
+  | { name: "history" };
 
 type AppShellProps = {
   token: string;
@@ -44,13 +46,24 @@ export function AppShell({ token }: AppShellProps) {
             <button
               type="button"
               className={
-                view.name === "library"
+                view.name === "library" || view.name === "workspace"
                   ? "app-shell-nav-btn is-active"
                   : "app-shell-nav-btn"
               }
               onClick={() => setView({ name: "library" })}
             >
               提示词库
+            </button>
+            <button
+              type="button"
+              className={
+                view.name === "history"
+                  ? "app-shell-nav-btn is-active"
+                  : "app-shell-nav-btn"
+              }
+              onClick={() => setView({ name: "history" })}
+            >
+              历史
             </button>
           </nav>
         </div>
@@ -83,6 +96,7 @@ export function AppShell({ token }: AppShellProps) {
               onBack={() => setView({ name: "library" })}
             />
           )}
+          {view.name === "history" && <GenerationHistoryPage token={token} />}
         </ViewErrorBoundary>
       </main>
     </div>

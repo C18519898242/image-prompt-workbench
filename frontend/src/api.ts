@@ -88,3 +88,49 @@ export async function logout(token: string): Promise<void> {
   });
   await parseResponse<void>(response);
 }
+
+export type GenerationHistoryItem = {
+  id: number;
+  prompt_card_id: number;
+  title: string;
+  image_path: string;
+  url: string;
+  model: string;
+  aspect_ratio: string;
+  resolution: string;
+  created_at: number;
+};
+
+export type GenerationHistoryListResponse = {
+  items: GenerationHistoryItem[];
+};
+
+export async function getGenerationHistories(
+  token: string,
+  options?: { prompt_card_id?: number },
+): Promise<GenerationHistoryItem[]> {
+  const params = new URLSearchParams();
+  if (options?.prompt_card_id != null) {
+    params.set("prompt_card_id", String(options.prompt_card_id));
+  }
+  const query = params.toString();
+  const response = await fetch(
+    `/api/generation-history${query ? `?${query}` : ""}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  const result = await parseResponse<GenerationHistoryListResponse>(response);
+  return result.items;
+}
+
+export async function deleteGenerationHistory(
+  token: string,
+  historyId: number,
+): Promise<void> {
+  const response = await fetch(`/api/generation-history/${historyId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  await parseResponse<void>(response);
+}

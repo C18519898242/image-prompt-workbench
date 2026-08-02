@@ -444,6 +444,20 @@ export function GenerationWorkspacePage({
           currentIndex={safeIndex + 1}
           total={images.length}
           onClose={() => setLightboxOpen(false)}
+          onDownload={() => {
+            if (exampleImageFailed) {
+              return;
+            }
+            const link = document.createElement("a");
+            link.href = exampleImage.url;
+            link.download =
+              exampleImage.path?.split("/").pop() ||
+              `${card.title}-example.jpg`;
+            link.rel = "noopener";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          }}
           onPrev={() =>
             setExampleImageIndex((index) => Math.max(0, index - 1))
           }
