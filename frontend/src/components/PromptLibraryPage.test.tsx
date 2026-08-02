@@ -168,8 +168,8 @@ test("点击封面可打开全屏大图预览", async () => {
   await user.click(await screen.findByRole("button", { name: "预览 赛博城市" }));
   const dialog = screen.getByRole("dialog", { name: "大图预览" });
   expect(dialog).toBeInTheDocument();
-  expect(dialog).toHaveTextContent("赛博城市");
-  expect(screen.getByText("1 / 2")).toBeInTheDocument();
+  expect(screen.getByText("1/2")).toBeInTheDocument();
+  expect(screen.getByText("1/2")).toHaveAttribute("title", "赛博城市");
   expect(dialog.querySelector("img")).toHaveAttribute(
     "src",
     "/media/prompt-images/0002-01.png",

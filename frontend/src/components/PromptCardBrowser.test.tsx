@@ -84,8 +84,8 @@ test("点击封面打开全屏大图预览", async () => {
 
   const lightbox = screen.getByRole("dialog", { name: "大图预览" });
   expect(lightbox).toBeInTheDocument();
-  expect(lightbox).toHaveTextContent("多图卡片");
-  expect(screen.getByText("1 / 2")).toBeInTheDocument();
+  expect(screen.getByText("1/2")).toBeInTheDocument();
+  expect(screen.getByText("1/2")).toHaveAttribute("title", "多图卡片");
   expect(lightbox.querySelector("img")).toHaveAttribute(
     "src",
     "/media/prompt-images/0001-01.jpg",
@@ -99,7 +99,7 @@ test("全屏预览可切换下一张", async () => {
   await user.click(await screen.findByRole("button", { name: "预览 多图卡片" }));
   await user.click(screen.getByRole("button", { name: "下一张" }));
 
-  expect(screen.getByText("2 / 2")).toBeInTheDocument();
+  expect(screen.getByText("2/2")).toBeInTheDocument();
   const lightbox = screen.getByRole("dialog", { name: "大图预览" });
   expect(lightbox.querySelector("img")).toHaveAttribute(
     "src",

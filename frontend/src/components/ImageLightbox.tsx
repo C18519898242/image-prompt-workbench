@@ -13,8 +13,8 @@ type ImageLightboxProps = {
 };
 
 /**
- * 全屏画廊预览（无对话框卡片感）：
- * 全屏深色遮罩 + 居中大图 + 两侧箭头 + 右上关闭。
+ * YouMind 式全屏预览：
+ * 近黑全屏底、顶部 1/N + 关闭、两侧圆角箭头、中间大图。
  */
 export function ImageLightbox({
   title,
@@ -55,18 +55,14 @@ export function ImageLightbox({
       aria-label="大图预览"
       onClick={onClose}
     >
-      <header
+      {/* 顶栏：左计数 右关闭，贴近 YouMind */}
+      <div
         className="image-lightbox-topbar"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="image-lightbox-meta">
-          <span className="image-lightbox-title">{title}</span>
-          {safeTotal > 1 && (
-            <span className="image-lightbox-counter">
-              {safeIndex} / {safeTotal}
-            </span>
-          )}
-        </div>
+        <span className="image-lightbox-counter" title={title}>
+          {safeIndex}/{safeTotal}
+        </span>
         <button
           type="button"
           className="image-lightbox-close"
@@ -75,7 +71,7 @@ export function ImageLightbox({
         >
           ×
         </button>
-      </header>
+      </div>
 
       <button
         type="button"
@@ -87,7 +83,15 @@ export function ImageLightbox({
           onPrev();
         }}
       >
-        ‹
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M14.5 5 8 12l6.5 7"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
 
       <div
@@ -116,7 +120,15 @@ export function ImageLightbox({
           onNext();
         }}
       >
-        ›
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M9.5 5 16 12l-6.5 7"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
     </div>
   );

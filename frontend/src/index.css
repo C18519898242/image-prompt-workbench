@@ -597,95 +597,74 @@ select:focus-visible {
   cursor: pointer;
 }
 
-/* —— 全屏画廊预览（YouMind 式：无对话框卡片） —— */
+/* —— 全屏画廊（对齐 YouMind：顶栏 1/N、两侧箭头、居中大图） —— */
 .image-lightbox {
   position: fixed;
   inset: 0;
   z-index: 1000;
   display: grid;
   place-items: center;
-  padding: 3.5rem 4.5rem 2rem;
-  /* 接近全黑的全屏遮罩，不是浮层卡片 */
-  background: rgb(0 0 0 / 92%);
+  padding: 3.25rem 5rem 1.5rem;
+  background: #0a0a0a;
   cursor: zoom-out;
-  color: #f3f4f6;
+  color: #e5e7eb;
 }
 
+/* 顶栏细条：左 1/4，右关闭 */
 .image-lightbox-topbar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 3;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 1.1rem 0.85rem 1.25rem;
-  background: linear-gradient(to bottom, rgb(0 0 0 / 55%), transparent);
+  height: 2.75rem;
+  padding: 0 1rem;
+  background: #111111;
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
   cursor: default;
 }
 
-.image-lightbox-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  min-width: 0;
-}
-
-.image-lightbox-title {
-  margin: 0;
-  max-width: min(60vw, 36rem);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #e5e7eb;
-}
-
 .image-lightbox-counter {
-  flex-shrink: 0;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 500;
-  color: #9ca3af;
+  letter-spacing: 0.02em;
+  color: #d1d5db;
+  font-variant-numeric: tabular-nums;
 }
 
 .image-lightbox-close {
   appearance: none;
-  flex-shrink: 0;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2rem;
+  height: 2rem;
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 8%);
-  color: #f9fafb;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #e5e7eb;
   font-size: 1.35rem;
   line-height: 1;
   cursor: pointer;
 }
 
 .image-lightbox-close:hover {
-  background: rgb(255 255 255 / 16%);
+  background: rgb(255 255 255 / 10%);
 }
 
-/* 图片本身铺满可视区，不套第二层深色卡片 */
+/* 中间大图：尽量大，无卡片框 */
 .image-lightbox-stage {
-  position: relative;
   z-index: 1;
   display: grid;
   place-items: center;
   width: 100%;
   height: 100%;
-  max-width: min(96vw, 90rem);
-  max-height: min(88vh, 56rem);
+  max-width: min(92vw, 72rem);
+  max-height: calc(100vh - 4.5rem);
   margin: 0;
   padding: 0;
-  border: none;
-  border-radius: 0;
   background: transparent;
   overflow: hidden;
   cursor: default;
@@ -694,13 +673,11 @@ select:focus-visible {
 .image-lightbox-image {
   display: block;
   max-width: 100%;
-  max-height: min(88vh, 56rem);
+  max-height: calc(100vh - 4.5rem);
   width: auto;
   height: auto;
   object-fit: contain;
   object-position: center;
-  /* 轻微阴影即可，不要框 */
-  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 45%);
 }
 
 .image-lightbox-empty {
@@ -708,46 +685,50 @@ select:focus-visible {
   font-size: 0.95rem;
 }
 
-/* 箭头贴视口左右，不在卡片内部 */
+/* 两侧圆角方按钮（贴屏幕边缘） */
 .image-lightbox-nav {
   appearance: none;
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 3;
-  width: 2.75rem;
-  height: 2.75rem;
+  z-index: 4;
+  width: 2.5rem;
+  height: 2.5rem;
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 10%);
-  color: #fff;
-  font-size: 1.75rem;
-  line-height: 1;
+  border-radius: 0.55rem;
+  background: #1f1f1f;
+  color: #f3f4f6;
   cursor: pointer;
+  box-shadow: 0 0.15rem 0.6rem rgb(0 0 0 / 45%);
 }
 
 .image-lightbox-nav:hover:not(:disabled) {
-  background: rgb(255 255 255 / 18%);
+  background: #2a2a2a;
 }
 
 .image-lightbox-nav:disabled {
-  opacity: 0.25;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
 .image-lightbox-nav-prev {
-  left: 1rem;
+  left: 0.85rem;
 }
 
 .image-lightbox-nav-next {
-  right: 1rem;
+  right: 0.85rem;
 }
 
 @media (max-width: 640px) {
   .image-lightbox {
-    padding: 3rem 0.5rem 1rem;
+    padding: 3rem 0.35rem 1rem;
+  }
+
+  .image-lightbox-nav {
+    width: 2.15rem;
+    height: 2.15rem;
   }
 
   .image-lightbox-nav-prev {
