@@ -80,7 +80,7 @@ button {
   height: 12rem;
   border-radius: 0.5rem;
   overflow: hidden;
-  background: #e8eaed;
+  background: #fff;
 }
 
 .prompt-card-image {
@@ -133,12 +133,12 @@ button {
 }
 
 .prompt-card-dialog {
-  width: min(100%, 42rem);
-  max-height: min(92vh, 48rem);
+  width: min(calc(100% - 2rem), 56rem);
+  max-height: min(94vh, 58rem);
   overflow: auto;
   display: grid;
   gap: 0.85rem;
-  padding: 1rem;
+  padding: 1.25rem 1.5rem;
   border-radius: 0.75rem;
   background: #fff;
 }
@@ -168,7 +168,7 @@ button {
   min-height: 10rem;
   border-radius: 0.5rem;
   overflow: hidden;
-  background: #e8eaed;
+  background: #fff;
 }
 
 .prompt-card-stage-hit {
@@ -268,19 +268,29 @@ button {
   object-fit: contain;
 }
 
+.prompt-card-dialog-prompt {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
 .prompt-card-dialog-prompt h3 {
-  margin: 0 0 0.35rem;
+  margin: 0;
   font-size: 0.95rem;
 }
 
 .prompt-card-dialog-prompt pre {
   margin: 0;
+  /* 固定高度，提示词过长时在区域内滚动 */
+  height: 11rem;
+  overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
   background: #f9fafb;
   border-radius: 0.5rem;
   padding: 0.75rem;
   font: inherit;
+  box-sizing: border-box;
 }
 
 .prompt-card-try-link {

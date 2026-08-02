@@ -10,6 +10,8 @@ import {
 
 import { ApiError, login as requestLogin, logout as requestLogout } from "../api";
 
+const TOKEN_SESSION_KEY = "ipw.auth.token";
+
 type LogoutFailure = {
   token: string;
   message: string;
@@ -25,15 +27,47 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function readStoredToken(): string | null {
+  try {
+    const value = sessionStorage.getItem(TOKEN_SESSION_KEY);
+    return value && value.length > 0 ? value : null;
+  } catch {
+    // 隐私模式等不可用 sessionStorage 时退回内存态
+    return null;
+  }
+}
+
+function writeStoredToken(token: string | null): void {
+  try {
+    if (token) {
+      sessionStorage.setItem(TOKEN_SESSION_KEY, token);
+    } else {
+      sessionStorage.removeItem(TOKEN_SESSION_KEY);
+    }
+  } catch {
+    // 忽略存储失败，仍保留内存中的 token
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setTokenState] = useState<string | null>(() => readStoredToken());
   const [logoutFailure, setLogoutFailure] = useState<LogoutFailure | null>(null);
   const currentTokenRef = useRef<string | null>(token);
   currentTokenRef.current = token;
 
+  const setToken = useCallback((next: string | null | ((current: string | null) => string | null)) => {
+    setTokenState((current) => {
+      const resolved = typeof next === "function" ? next(current) : next;
+      if (resolved !== current) {
+        writeStoredToken(resolved);
+      }
+      return resolved;
+    });
+  }, []);
+
   const login = useCallback(async (password: string) => {
     setToken(await requestLogin(password));
-  }, []);
+  }, [setToken]);
 
   const logout = useCallback(async () => {
     if (!token) return;
@@ -67,13 +101,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         message: "退出登录失败，请检查网络后重试",
       });
     }
-  }, [token]);
+  }, [setToken, token]);
 
   const clearToken = useCallback((expectedToken: string) => {
     setToken((currentToken) => (
       currentToken === expectedToken ? null : currentToken
     ));
-  }, []);
+  }, [setToken]);
 
   const value = useMemo<AuthContextValue>(() => ({
     token,
