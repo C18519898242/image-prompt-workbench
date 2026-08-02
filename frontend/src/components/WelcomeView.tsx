@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ApiError, getWelcome } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { LogoutButton } from "./LogoutButton";
+import { PromptCardBrowser } from "./PromptCardBrowser";
 
 export function WelcomeView({ token }: { token: string }) {
   const { clearToken } = useAuth();
@@ -29,10 +30,13 @@ export function WelcomeView({ token }: { token: string }) {
   }, [clearToken, token]);
 
   return (
-    <main>
-      {message && <p>{message}</p>}
-      {error && <p role="alert">{error}</p>}
-      <LogoutButton />
+    <main className="app-shell">
+      <header className="app-shell-header">
+        {message && <p>{message}</p>}
+        {error && <p role="alert">{error}</p>}
+        <LogoutButton />
+      </header>
+      {message && <PromptCardBrowser token={token} />}
     </main>
   );
 }

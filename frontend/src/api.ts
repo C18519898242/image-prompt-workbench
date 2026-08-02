@@ -1,6 +1,25 @@
 export type LoginResponse = { token: string };
 export type WelcomeResponse = { message: string };
 
+export type PromptCardImage = {
+  index: number;
+  url: string;
+};
+
+export type PromptCard = {
+  id: number;
+  title: string;
+  prompt_text: string;
+  sort_order: number;
+  category_ids: number[];
+  image_count: number;
+  images: PromptCardImage[];
+};
+
+export type PromptCardListResponse = {
+  items: PromptCard[];
+};
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -33,6 +52,28 @@ export async function getWelcome(token: string): Promise<string> {
   });
   const result = await parseResponse<WelcomeResponse>(response);
   return result.message;
+}
+
+export async function getPromptCards(token: string): Promise<PromptCard[]> {
+  const response = await fetch("/api/prompt-cards", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const result = await parseResponse<PromptCardListResponse>(response);
+  return result.items;
+}
+
+export async function fetchImageObjectUrl(
+  token: string,
+  url: string,
+): Promise<string> {
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, `Request failed with status ${response.status}`);
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
 }
 
 export async function logout(token: string): Promise<void> {
