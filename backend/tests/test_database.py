@@ -28,6 +28,7 @@ def test_schema_creates_expected_tables(database: sqlite3.Connection) -> None:
         "prompt_cards",
         "categories",
         "prompt_card_categories",
+        "generation_history",
     }
 
 
@@ -123,3 +124,72 @@ def test_category_lookup_index_exists(database: sqlite3.Connection) -> None:
     }
 
     assert "idx_prompt_card_categories_category" in indexes
+
+
+def test_generation_history_contains_expected_columns(
+    database: sqlite3.Connection,
+) -> None:
+    columns = {
+        row[1]: (row[2], row[3])
+        for row in database.execute("PRAGMA table_info(generation_history)")
+    }
+
+    assert columns == {
+        "id": ("INTEGER", 0),
+        "prompt_card_id": ("INTEGER", 1),
+        "image_path": ("TEXT", 1),
+        "model": ("TEXT", 1),
+        "aspect_ratio": ("TEXT", 1),
+        "resolution": ("TEXT", 1),
+        "created_at": ("INTEGER", 1),
+    }
+
+
+def test_generation_history_has_prompt_card_lookup_index(
+    database: sqlite3.Connection,
+) -> None:
+    indexes = {
+        row[1]
+        for row in database.execute("PRAGMA index_list(generation_history)")
+    }
+
+    assert "idx_generation_history_prompt_card" in indexes
+
+
+def test_generation_history_keeps_prompt_card_as_required_source(
+    database: sqlite3.Connection,
+) -> None:
+    database.execute("PRAGMA foreign_keys = ON")
+    with pytest.raises(sqlite3.IntegrityError):
+        database.execute(
+            "INSERT INTO generation_history "
+            "(prompt_card_id, image_path, model, aspect_ratio, resolution) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (999, "generated-images/missing.png", "model", "4:3", "1K"),
+        )
+
+
+def test_generation_history_migration_is_idempotent(tmp_path: Path) -> None:
+    connection = sqlite3.connect(tmp_path / "app.db")
+    connection.executescript(
+        """
+        CREATE TABLE prompt_cards (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            prompt_text TEXT NOT NULL,
+            example_image_path TEXT NOT NULL
+        );
+        """
+    )
+    migration = Path(__file__).resolve().parents[1] / (
+        "migrations/2026-08-02-add-generation-history.sql"
+    )
+
+    connection.executescript(migration.read_text(encoding="utf-8"))
+    connection.executescript(migration.read_text(encoding="utf-8"))
+
+    assert connection.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type = 'table' AND name = 'generation_history'"
+    ).fetchone() == ("generation_history",)
+    connection.close()
