@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
@@ -403,6 +403,11 @@ test("使用此提示词进入工作台并可返回", async () => {
   expect(screen.getByRole("heading", { name: "测试卡片" })).toBeInTheDocument();
   expect(screen.getByDisplayValue("测试提示词")).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "提示词库" }));
+  await user.click(
+    within(screen.getByRole("navigation", { name: "面包屑" })).getByRole(
+      "button",
+      { name: "提示词库" },
+    ),
+  );
   expect(await screen.findByText("测试卡片")).toBeInTheDocument();
 });
