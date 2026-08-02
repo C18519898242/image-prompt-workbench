@@ -17,6 +17,37 @@ def repository(tmp_path: Path):
     connection.close()
 
 
+def test_create_and_get_prompt_card_preserves_image_count(
+    repository: PromptCardRepository,
+) -> None:
+    card_id = repository.create_prompt_card(
+        title="多图卡片",
+        prompt_text="完整提示词",
+        example_image_path="prompt-images/0001-01.jpg",
+        image_count=3,
+    )
+
+    card = repository.get_prompt_card(card_id)
+
+    assert card is not None
+    assert card.image_count == 3
+
+
+def test_create_prompt_card_defaults_to_one_image(
+    repository: PromptCardRepository,
+) -> None:
+    card_id = repository.create_prompt_card(
+        title="单图卡片",
+        prompt_text="完整提示词",
+        example_image_path="prompt-images/0002-01.png",
+    )
+
+    card = repository.get_prompt_card(card_id)
+
+    assert card is not None
+    assert card.image_count == 1
+
+
 def test_create_and_get_prompt_card_with_categories(
     repository: PromptCardRepository,
 ) -> None:

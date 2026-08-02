@@ -45,9 +45,40 @@ def test_prompt_cards_contains_expected_columns(
         "prompt_text": ("TEXT", 1, None),
         "example_image_path": ("TEXT", 1, None),
         "sort_order": ("INTEGER", 1, "0"),
+        "image_count": ("INTEGER", 1, "1"),
         "created_at": ("TEXT", 1, "CURRENT_TIMESTAMP"),
         "updated_at": ("TEXT", 1, "CURRENT_TIMESTAMP"),
     }
+
+
+def test_image_count_migration_adds_default_to_existing_table() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.executescript(
+        """
+        CREATE TABLE prompt_cards (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            prompt_text TEXT NOT NULL,
+            example_image_path TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO prompt_cards
+        (title, prompt_text, example_image_path)
+        VALUES ('旧卡片', '旧提示词', 'prompt-images/0001-01.jpg');
+        """
+    )
+
+    migration = Path(
+        __file__
+    ).resolve().parents[1] / "migrations/2026-08-02-add-image-count.sql"
+    connection.executescript(migration.read_text(encoding="utf-8"))
+
+    assert connection.execute(
+        "SELECT image_count FROM prompt_cards WHERE id = 1"
+    ).fetchone() == (1,)
+    connection.close()
 
 
 def test_categories_name_is_unique(database: sqlite3.Connection) -> None:

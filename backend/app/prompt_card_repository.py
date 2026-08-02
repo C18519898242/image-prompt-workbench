@@ -10,6 +10,7 @@ class PromptCard:
     prompt_text: str
     example_image_path: str
     sort_order: int
+    image_count: int
     created_at: str
     updated_at: str
     category_ids: tuple[int, ...]
@@ -35,15 +36,23 @@ class PromptCardRepository:
         prompt_text: str,
         example_image_path: str,
         sort_order: int = 0,
+        image_count: int = 1,
         category_ids: Iterable[int] = (),
     ) -> int:
+        normalized_image_count = self._normalize_image_count(image_count)
         normalized_category_ids = self._normalize_category_ids(category_ids)
         with self._connection:
             cursor = self._connection.execute(
                 "INSERT INTO prompt_cards "
-                "(title, prompt_text, example_image_path, sort_order) "
-                "VALUES (?, ?, ?, ?)",
-                (title, prompt_text, example_image_path, sort_order),
+                "(title, prompt_text, example_image_path, image_count, sort_order) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    title,
+                    prompt_text,
+                    example_image_path,
+                    normalized_image_count,
+                    sort_order,
+                ),
             )
             card_id = int(cursor.lastrowid)
             self._replace_category_links(card_id, normalized_category_ids)
@@ -52,7 +61,7 @@ class PromptCardRepository:
     def get_prompt_card(self, card_id: int) -> PromptCard | None:
         row = self._connection.execute(
             "SELECT id, title, prompt_text, example_image_path, sort_order, "
-            "created_at, updated_at "
+            "image_count, created_at, updated_at "
             "FROM prompt_cards WHERE id = ?",
             (card_id,),
         ).fetchone()
@@ -61,7 +70,7 @@ class PromptCardRepository:
     def list_prompt_cards(self, category_id: int | None = None) -> list[PromptCard]:
         query = (
             "SELECT id, title, prompt_text, example_image_path, sort_order, "
-            "created_at, updated_at FROM prompt_cards"
+            "image_count, created_at, updated_at FROM prompt_cards"
         )
         parameters: tuple[int, ...] = ()
         if category_id is not None:
@@ -85,19 +94,22 @@ class PromptCardRepository:
         prompt_text: str,
         example_image_path: str,
         sort_order: int,
+        image_count: int = 1,
         category_ids: Iterable[int] = (),
     ) -> bool:
+        normalized_image_count = self._normalize_image_count(image_count)
         normalized_category_ids = self._normalize_category_ids(category_ids)
         with self._connection:
             cursor = self._connection.execute(
                 "UPDATE prompt_cards SET "
                 "title = ?, prompt_text = ?, example_image_path = ?, "
-                "sort_order = ?, updated_at = CURRENT_TIMESTAMP "
+                "image_count = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP "
                 "WHERE id = ?",
                 (
                     title,
                     prompt_text,
                     example_image_path,
+                    normalized_image_count,
                     sort_order,
                     card_id,
                 ),
@@ -181,6 +193,13 @@ class PromptCardRepository:
     ) -> tuple[int, ...]:
         return tuple(dict.fromkeys(int(category_id) for category_id in category_ids))
 
+    @staticmethod
+    def _normalize_image_count(image_count: int) -> int:
+        count = int(image_count)
+        if count < 1:
+            raise ValueError("image_count must be positive")
+        return count
+
     def _to_prompt_card(self, row: sqlite3.Row) -> PromptCard:
         category_rows = self._connection.execute(
             "SELECT category_id FROM prompt_card_categories "
@@ -193,9 +212,12 @@ class PromptCardRepository:
             prompt_text=row["prompt_text"],
             example_image_path=row["example_image_path"],
             sort_order=row["sort_order"],
+            image_count=row["image_count"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
-            category_ids=tuple(category_row["category_id"] for category_row in category_rows),
+            category_ids=tuple(
+                category_row["category_id"] for category_row in category_rows
+            ),
         )
 
     @staticmethod

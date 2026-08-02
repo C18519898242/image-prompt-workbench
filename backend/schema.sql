@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS prompt_cards (
     prompt_text TEXT NOT NULL,
     example_image_path TEXT NOT NULL,
     sort_order INTEGER NOT NULL DEFAULT 0,
+    image_count INTEGER NOT NULL DEFAULT 1 CHECK (image_count > 0),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
