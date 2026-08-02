@@ -68,6 +68,24 @@ python -c "import sqlite3; connection=sqlite3.connect('data/app.db'); connection
 sqlite3 data/app.db < backend/schema.sql
 ```
 
+### 已有数据库迁移
+
+全新数据库直接使用更新后的 `backend/schema.sql` 初始化即可，**不要**再执行迁移文件。
+
+若数据库已在增加 `image_count` 字段之前创建，只需执行一次迁移：
+
+```powershell
+sqlite3 data/app.db < backend/migrations/2026-08-02-add-image-count.sql
+```
+
+使用 Python 时：
+
+```powershell
+python -c "import sqlite3; connection=sqlite3.connect('data/app.db'); connection.executescript(open('backend/migrations/2026-08-02-add-image-count.sql', encoding='utf-8').read()); connection.close()"
+```
+
+迁移会为已有卡片写入默认 `image_count = 1`。同一迁移不要重复执行。
+
 ## 导入提示词卡片
 
 `app.import_prompt_cards` 用于从远程 `README_zh.md` 解析提示词卡片，下载示例图片，并写入 SQLite 数据库。运行前请先完成上面的数据表初始化。
@@ -105,6 +123,17 @@ python -m app.import_prompt_cards --source-url "https://github.com/用户/仓库
 也兼容无 emoji 标题与 Markdown 图片写法（`#### 提示词` / `![示例](images/example.png)`）。
 
 每张卡片都必须包含提示词和至少一张图片；缺少任一内容时，本次导入会失败。重复执行命令会重复插入卡片，当前不会自动去重。
+
+### 多图命名与展示
+
+一个卡片的图片按照 `0001-01.jpg`、`0001-02.jpg` 的顺序保存。
+数据库使用第一张图片路径（`example_image_path`）和 `image_count` 记录多图关系。
+列表页显示第一张图片和图片总数，点击后在详情轮播中完整查看图片（`object-fit: contain`，不裁剪、不拉伸）。
+同一卡片 JPG/PNG 混用时当前只打印警告，不做格式转换。
+重复导入策略暂不处理。
+
+登录后，前端通过受 Bearer Token 保护的 `/api/prompt-cards` 与 `/api/prompt-cards/{id}/images/{index}` 加载卡片与图片。
+
 ## 测试与构建
 
 ```bash
