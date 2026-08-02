@@ -103,9 +103,10 @@ export function GenerationWorkspacePage({
                       className="generation-example-nav generation-example-nav-prev"
                       aria-label="上一张示例图"
                       disabled={safeIndex === 0}
-                      onClick={() =>
-                        setExampleImageIndex((index) => Math.max(0, index - 1))
-                      }
+                      onClick={(event) => {
+                        setExampleImageIndex((index) => Math.max(0, index - 1));
+                        event.currentTarget.blur();
+                      }}
                     >
                       <svg
                         width="18"
@@ -128,11 +129,12 @@ export function GenerationWorkspacePage({
                       className="generation-example-nav generation-example-nav-next"
                       aria-label="下一张示例图"
                       disabled={safeIndex >= images.length - 1}
-                      onClick={() =>
+                      onClick={(event) => {
                         setExampleImageIndex((index) =>
                           Math.min(images.length - 1, index + 1),
-                        )
-                      }
+                        );
+                        event.currentTarget.blur();
+                      }}
                     >
                       <svg
                         width="18"

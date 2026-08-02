@@ -988,8 +988,8 @@ select:focus-visible {
   transition: opacity 0.15s ease, visibility 0.15s ease;
 }
 
-.generation-workspace .generation-example-image-frame:hover .generation-example-nav,
-.generation-workspace .generation-example-image-frame:focus-within .generation-example-nav {
+/* 只用 :hover，不用 :focus-within——点第二页后焦点停在按钮上会导致箭头一直显示 */
+.generation-workspace .generation-example-image-frame:hover .generation-example-nav {
   opacity: 1 !important;
   visibility: visible;
   pointer-events: auto;
@@ -1002,9 +1002,6 @@ select:focus-visible {
 
 .generation-workspace
   .generation-example-image-frame:hover
-  .generation-example-nav:disabled,
-.generation-workspace
-  .generation-example-image-frame:focus-within
   .generation-example-nav:disabled {
   opacity: 0.35 !important;
   visibility: visible;
