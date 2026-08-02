@@ -7,7 +7,14 @@ import re
 import sqlite3
 import sys
 from urllib.error import HTTPError
-from urllib.parse import urljoin, urlparse
+from urllib.parse import (
+    SplitResult,
+    quote,
+    urljoin,
+    urlparse,
+    urlsplit,
+    urlunsplit,
+)
 from urllib.request import Request, urlopen
 
 from app.prompt_card_repository import PromptCardRepository
@@ -22,8 +29,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATABASE_PATH = PROJECT_ROOT / "data/app.db"
 DEFAULT_IMAGE_DIRECTORY = PROJECT_ROOT / "data/prompt-images"
 _CARD_PATTERN = re.compile(r"^###\s+No\.\s*\d+\s*:\s*(.+?)\s*$", re.MULTILINE)
+# 兼容「#### 提示词」与上游「#### 📝 提示词」等带 emoji 的标题
 _PROMPT_SECTION_PATTERN = re.compile(
-    r"^####\s+提示词\s*$([\s\S]*?)(?=^####\s|\Z)",
+    r"^####\s+.*?提示词\s*$([\s\S]*?)(?=^####\s|\Z)",
     re.MULTILINE,
 )
 _PROMPT_BLOCK_PATTERN = re.compile(r"```[^\r\n]*\r?\n([\s\S]*?)\r?\n?```")
@@ -31,8 +39,11 @@ _IMAGE_SECTION_PATTERN = re.compile(
     r"^####\s+.*生成图片.*$([\s\S]*?)(?=^####\s|\Z)",
     re.MULTILINE,
 )
-_IMAGE_PATTERN = re.compile(r"!\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)")
-
+_IMAGE_MARKDOWN_PATTERN = re.compile(r"!\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)")
+_IMAGE_HTML_PATTERN = re.compile(
+    r"""<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']""",
+    re.IGNORECASE,
+)
 
 @dataclass(frozen=True)
 class ParsedPromptCard:
@@ -68,10 +79,15 @@ def import_prompt_cards(
     source_url: str,
     database_path: str | Path = DEFAULT_DATABASE_PATH,
     image_dir: str | Path = DEFAULT_IMAGE_DIRECTORY,
+    progress: bool = True,
 ) -> int:
     source_url = normalize_source_url(source_url)
+    _log(progress, f"正在获取来源：{redact_url_for_log(source_url)}")
     markdown = _fetch_text(source_url)
     cards = parse_prompt_cards(markdown)
+    total_cards = len(cards)
+    total_images = sum(len(card.image_urls) for card in cards)
+    _log(progress, f"已解析 {total_cards} 张卡片，共 {total_images} 张图片")
     database_path = Path(database_path)
     image_dir = Path(image_dir)
     image_dir.mkdir(parents=True, exist_ok=True)
@@ -81,12 +97,18 @@ def import_prompt_cards(
     try:
         repository = PromptCardRepository(connection)
         imported_count = 0
+        downloaded_images = 0
         for card_number, card in enumerate(cards, start=1):
             if not card.prompt_text:
                 raise ValueError(f"第 {card_number} 张卡片缺少提示词")
             if not card.image_urls:
                 raise ValueError(f"第 {card_number} 张卡片缺少图片")
 
+            image_count = len(card.image_urls)
+            _log(
+                progress,
+                f"[{card_number}/{total_cards}] {card.title}（{image_count} 张图片）",
+            )
             image_paths = []
             for image_number, image_url in enumerate(card.image_urls, start=1):
                 destination = image_dir / _image_filename(
@@ -94,7 +116,17 @@ def import_prompt_cards(
                     image_number,
                     image_url,
                 )
+                resolved_url = urljoin(source_url, image_url)
+                downloaded_images += 1
+                _log(
+                    progress,
+                    f"  下载图片 [{downloaded_images}/{total_images}] "
+                    f"{image_number}/{image_count} -> {destination.name}",
+                )
+                _log(progress, f"    {redact_url_for_log(resolved_url)}")
                 _download_image(image_url, source_url, destination)
+                size_kb = destination.stat().st_size / 1024
+                _log(progress, f"    完成 {size_kb:.1f} KB")
                 image_paths.append(
                     (relative_image_directory / destination.name).as_posix()
                 )
@@ -107,9 +139,15 @@ def import_prompt_cards(
                 category_ids=(),
             )
             imported_count += 1
+            _log(progress, f"  已写入数据库（第 {imported_count} 张）")
         return imported_count
     finally:
         connection.close()
+
+
+def _log(progress: bool, message: str) -> None:
+    if progress:
+        print(message, flush=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -165,11 +203,20 @@ def _extract_image_urls(section: str) -> tuple[str, ...]:
     image_section = _IMAGE_SECTION_PATTERN.search(section)
     if image_section is None:
         return ()
-    return tuple(_IMAGE_PATTERN.findall(image_section.group(1)))
-
+    body = image_section.group(1)
+    matches: list[tuple[int, str]] = []
+    for match in _IMAGE_MARKDOWN_PATTERN.finditer(body):
+        matches.append((match.start(), match.group(1)))
+    for match in _IMAGE_HTML_PATTERN.finditer(body):
+        matches.append((match.start(), match.group(1)))
+    matches.sort(key=lambda item: item[0])
+    return tuple(url for _, url in matches)
 
 def _fetch_text(source_url: str) -> str:
-    request = Request(source_url, headers={"User-Agent": "ImagePromptWorkbench/1.0"})
+    request = Request(
+        encode_url(source_url),
+        headers={"User-Agent": "ImagePromptWorkbench/1.0"},
+    )
     with urlopen(request, timeout=30) as response:
         encoding = response.headers.get_content_charset() or "utf-8"
         return response.read().decode(encoding)
@@ -192,10 +239,64 @@ def normalize_source_url(source_url: str) -> str:
     return source_url
 
 
+def encode_url(url: str) -> str:
+    """将可能含非 ASCII 字符的 IRI 转为 urllib 可请求的 URI。
+
+    - 路径 / 查询 / 片段：百分号编码
+    - 主机名：IDNA（如中文域名 → xn--…）
+    """
+    parts = urlsplit(url)
+    return urlunsplit(
+        (
+            parts.scheme,
+            _encode_netloc(parts),
+            quote(parts.path, safe="/%"),
+            quote(parts.query, safe="=&%"),
+            quote(parts.fragment, safe="%"),
+        )
+    )
+
+
+def redact_url_for_log(url: str) -> str:
+    """进度日志用：去掉 query 与 fragment，避免泄露 token 等敏感参数。"""
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
+def _encode_netloc(parts: SplitResult) -> str:
+    """将 SplitResult 的主机名转为 IDNA ASCII，并保留 userinfo / 端口。"""
+    hostname = parts.hostname
+    if hostname is None:
+        return parts.netloc
+
+    try:
+        hostname_idna = hostname.encode("idna").decode("ascii")
+    except UnicodeError as error:
+        raise ValueError(f"无法将主机名编码为 IDNA：{hostname}") from error
+
+    # IPv6 在 netloc 中需要方括号
+    if ":" in hostname_idna:
+        host = f"[{hostname_idna}]"
+    else:
+        host = hostname_idna
+
+    auth = ""
+    if parts.username is not None:
+        user = quote(parts.username, safe="")
+        if parts.password is not None:
+            auth = f"{user}:{quote(parts.password, safe='')}@"
+        else:
+            auth = f"{user}@"
+
+    if parts.port is not None:
+        return f"{auth}{host}:{parts.port}"
+    return f"{auth}{host}"
+
+
 def _download_image(image_url: str, source_url: str, destination: Path) -> None:
     resolved_url = urljoin(source_url, image_url)
     request = Request(
-        resolved_url,
+        encode_url(resolved_url),
         headers={"User-Agent": "ImagePromptWorkbench/1.0"},
     )
     with urlopen(request, timeout=30) as response:

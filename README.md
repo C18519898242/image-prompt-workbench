@@ -68,6 +68,43 @@ python -c "import sqlite3; connection=sqlite3.connect('data/app.db'); connection
 sqlite3 data/app.db < backend/schema.sql
 ```
 
+## 导入提示词卡片
+
+`app.import_prompt_cards` 用于从远程 `README_zh.md` 解析提示词卡片，下载示例图片，并写入 SQLite 数据库。运行前请先完成上面的数据表初始化。
+
+在项目根目录执行：
+
+```powershell
+Set-Location C:\src\image-prompt-workbench\backend
+python -m app.import_prompt_cards
+```
+
+不传参数时，命令使用默认来源，并将数据写入以下位置：
+
+- 数据库：`C:\src\image-prompt-workbench\data\app.db`
+- 图片目录：`C:\src\image-prompt-workbench\data\prompt-images`
+
+也可以指定自己的远程 Markdown 地址、数据库和图片目录：
+
+```powershell
+python -m app.import_prompt_cards --source-url "https://github.com/用户/仓库/blob/main/README_zh.md" --database "C:\src\image-prompt-workbench\data\app.db" --image-dir "C:\src\image-prompt-workbench\data\prompt-images"
+```
+
+`--source-url` 支持 GitHub 的 `blob` 地址，程序会自动转换为原始文件地址。来源 Markdown 需要包含类似下面的卡片结构（标题可带 emoji，图片支持 Markdown 与 HTML `<img>`）：
+
+````markdown
+### No. 1: 卡片标题
+#### 📝 提示词
+```text
+这里是提示词内容
+```
+#### 🖼️ 生成图片
+<img src="https://example.com/example.png" alt="示例图片">
+````
+
+也兼容无 emoji 标题与 Markdown 图片写法（`#### 提示词` / `![示例](images/example.png)`）。
+
+每张卡片都必须包含提示词和至少一张图片；缺少任一内容时，本次导入会失败。重复执行命令会重复插入卡片，当前不会自动去重。
 ## 测试与构建
 
 ```bash
