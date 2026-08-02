@@ -73,10 +73,19 @@ def test_list_prompt_cards_returns_images(
     assert len(payload["items"]) == 1
     card = payload["items"][0]
     assert card["image_count"] == 2
+    assert card["example_image_path"] == "prompt-images/0001-01.jpg"
     assert len(card["images"]) == 2
     assert card["images"] == [
-        {"index": 1, "url": "/api/prompt-cards/1/images/1"},
-        {"index": 2, "url": "/api/prompt-cards/1/images/2"},
+        {
+            "index": 1,
+            "path": "prompt-images/0001-01.jpg",
+            "url": "/media/prompt-images/0001-01.jpg",
+        },
+        {
+            "index": 2,
+            "path": "prompt-images/0001-02.jpg",
+            "url": "/media/prompt-images/0001-02.jpg",
+        },
     ]
 
 

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import type { PromptCard } from "../api";
 
 type PromptCardDialogProps = {
@@ -5,7 +7,10 @@ type PromptCardDialogProps = {
   currentIndex: number;
   imageUrl: string | null;
   imageFailed: boolean;
+  onImageError: () => void;
   thumbnailUrls: Record<number, string | null>;
+  failedThumbnails: Record<number, boolean>;
+  onThumbnailError: (index: number) => void;
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -17,12 +22,36 @@ export function PromptCardDialog({
   currentIndex,
   imageUrl,
   imageFailed,
+  onImageError,
   thumbnailUrls,
+  failedThumbnails,
+  onThumbnailError,
   onClose,
   onPrev,
   onNext,
   onSelectIndex,
 }: PromptCardDialogProps) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    setPreviewOpen(false);
+  }, [currentIndex, card.id]);
+
+  useEffect(() => {
+    if (!previewOpen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreviewOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [previewOpen]);
+
+  const canPreview = Boolean(imageUrl && !imageFailed);
+
   return (
     <div className="prompt-card-dialog-backdrop" role="presentation">
       <div
@@ -39,8 +68,15 @@ export function PromptCardDialog({
         </div>
 
         <div className="prompt-card-stage">
-          {imageUrl && !imageFailed ? (
-            <img src={imageUrl} alt="" />
+          {canPreview ? (
+            <button
+              type="button"
+              className="prompt-card-stage-hit"
+              onClick={() => setPreviewOpen(true)}
+              aria-label="预览大图"
+            >
+              <img src={imageUrl!} alt="" onError={onImageError} />
+            </button>
           ) : (
             <span className="prompt-card-image-placeholder">暂无图片</span>
           )}
@@ -66,6 +102,7 @@ export function PromptCardDialog({
           <div className="prompt-card-thumbnails">
             {card.images.map((image) => {
               const thumb = thumbnailUrls[image.index];
+              const failed = failedThumbnails[image.index];
               return (
                 <button
                   key={image.index}
@@ -78,8 +115,12 @@ export function PromptCardDialog({
                   onClick={() => onSelectIndex(image.index)}
                   aria-label={`第 ${image.index} 张`}
                 >
-                  {thumb ? (
-                    <img src={thumb} alt="" />
+                  {thumb && !failed ? (
+                    <img
+                      src={thumb}
+                      alt=""
+                      onError={() => onThumbnailError(image.index)}
+                    />
                   ) : (
                     <span>{image.index}</span>
                   )}
@@ -100,9 +141,34 @@ export function PromptCardDialog({
           target="_blank"
           rel="noreferrer"
         >
-          立即尝试
+          立即生成
         </a>
       </div>
+
+      {previewOpen && canPreview && (
+        <div
+          className="prompt-card-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="大图预览"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <button
+            type="button"
+            className="prompt-card-lightbox-close"
+            aria-label="关闭预览"
+            onClick={() => setPreviewOpen(false)}
+          >
+            关闭
+          </button>
+          <img
+            className="prompt-card-lightbox-image"
+            src={imageUrl!}
+            alt={card.title}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

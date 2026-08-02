@@ -3,6 +3,9 @@ export type WelcomeResponse = { message: string };
 
 export type PromptCardImage = {
   index: number;
+  /** 相对 data/ 的路径，如 prompt-images/0001-01.jpg */
+  path: string;
+  /** 同源公开 URL，如 /media/prompt-images/0001-01.jpg */
   url: string;
 };
 
@@ -13,6 +16,7 @@ export type PromptCard = {
   sort_order: number;
   category_ids: number[];
   image_count: number;
+  example_image_path: string;
   images: PromptCardImage[];
 };
 
@@ -60,20 +64,6 @@ export async function getPromptCards(token: string): Promise<PromptCard[]> {
   });
   const result = await parseResponse<PromptCardListResponse>(response);
   return result.items;
-}
-
-export async function fetchImageObjectUrl(
-  token: string,
-  url: string,
-): Promise<string> {
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) {
-    throw new ApiError(response.status, `Request failed with status ${response.status}`);
-  }
-  const blob = await response.blob();
-  return URL.createObjectURL(blob);
 }
 
 export async function logout(token: string): Promise<void> {

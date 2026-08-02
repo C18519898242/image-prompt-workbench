@@ -4,6 +4,7 @@ type PromptCardCardProps = {
   card: PromptCard;
   imageUrl: string | null;
   imageFailed: boolean;
+  onImageError: () => void;
   onOpen: () => void;
 };
 
@@ -11,6 +12,7 @@ export function PromptCardCard({
   card,
   imageUrl,
   imageFailed,
+  onImageError,
   onOpen,
 }: PromptCardCardProps) {
   const summary =
@@ -27,7 +29,12 @@ export function PromptCardCard({
     >
       <div className="prompt-card-image-frame">
         {imageUrl && !imageFailed ? (
-          <img className="prompt-card-image" src={imageUrl} alt="" />
+          <img
+            className="prompt-card-image"
+            src={imageUrl}
+            alt=""
+            onError={onImageError}
+          />
         ) : (
           <span className="prompt-card-image-placeholder">暂无图片</span>
         )}

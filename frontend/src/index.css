@@ -73,26 +73,25 @@ button {
   padding: 0.75rem;
 }
 
-.prompt-card-image-frame,
-.prompt-card-stage {
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  background: #e5e7eb;
-}
-
+/* 列表卡片：固定高度框 + contain */
 .prompt-card-image-frame {
   position: relative;
   width: 100%;
   height: 12rem;
   border-radius: 0.5rem;
+  overflow: hidden;
+  background: #e8eaed;
 }
 
-.prompt-card-image,
-.prompt-card-stage img {
+.prompt-card-image {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
+  object-position: center;
+  box-sizing: border-box;
 }
 
 .prompt-card-image-placeholder {
@@ -156,10 +155,84 @@ button {
   font-size: 1.1rem;
 }
 
+/*
+ * 详情主图：高度随图片比例伸缩，不再用固定高框。
+ * - 横图：宽度优先铺满，高度按比例，几乎无上下大留白
+ * - 竖/长图：高度顶到 max-height，宽度缩小，两侧灰底留白
+ */
 .prompt-card-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  height: 20rem;
+  min-height: 10rem;
   border-radius: 0.5rem;
+  overflow: hidden;
+  background: #e8eaed;
+}
+
+.prompt-card-stage-hit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.prompt-card-stage-hit img {
+  display: block;
+  /* 关键：用视口上限约束，勿再套一层固定高度 absolute 框 */
+  max-width: 100%;
+  max-height: min(52vh, 28rem);
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+}
+
+.prompt-card-stage .prompt-card-image-placeholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 10rem;
+}
+
+.prompt-card-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgb(15 23 42 / 88%);
+  cursor: zoom-out;
+}
+
+.prompt-card-lightbox-image {
+  max-width: min(96vw, 72rem);
+  max-height: 92vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 0.5rem;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 45%);
+  cursor: default;
+  background: #111827;
+}
+
+.prompt-card-lightbox-close {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 61;
+  cursor: pointer;
 }
 
 .prompt-card-carousel-controls {

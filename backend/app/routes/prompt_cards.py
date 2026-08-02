@@ -7,7 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.prompt_card_images import derive_image_paths, get_image_media_type
+from app.prompt_card_images import (
+    build_public_image_refs,
+    derive_image_paths,
+    get_image_media_type,
+)
 from app.prompt_card_repository import PromptCard, PromptCardRepository
 from app.routes.auth import require_token
 
@@ -16,6 +20,7 @@ router = APIRouter(tags=["prompt-cards"])
 
 class PromptCardImageItem(BaseModel):
     index: int
+    path: str
     url: str
 
 
@@ -26,6 +31,7 @@ class PromptCardItem(BaseModel):
     sort_order: int
     category_ids: list[int]
     image_count: int
+    example_image_path: str
     images: list[PromptCardImageItem]
 
 
@@ -57,6 +63,10 @@ def get_prompt_card_image(
     request: Request,
     _: str = Depends(require_token),
 ) -> FileResponse:
+    """兼容旧客户端：仍可通过鉴权 API 读取图片文件。
+
+    浏览器展示优先使用列表接口返回的 /media/... 静态 URL。
+    """
     settings = request.app.state.settings
     connection = sqlite3.connect(settings.database_path)
     try:
@@ -100,12 +110,14 @@ def get_prompt_card_image(
 
 
 def _to_prompt_card_item(card: PromptCard) -> PromptCardItem:
+    try:
+        refs = build_public_image_refs(card.example_image_path, card.image_count)
+    except ValueError:
+        refs = []
+
     images = [
-        PromptCardImageItem(
-            index=index,
-            url=f"/api/prompt-cards/{card.id}/images/{index}",
-        )
-        for index in range(1, card.image_count + 1)
+        PromptCardImageItem(index=index, path=path, url=url)
+        for index, path, url in refs
     ]
     return PromptCardItem(
         id=card.id,
@@ -114,5 +126,6 @@ def _to_prompt_card_item(card: PromptCard) -> PromptCardItem:
         sort_order=card.sort_order,
         category_ids=list(card.category_ids),
         image_count=card.image_count,
+        example_image_path=card.example_image_path,
         images=images,
     )

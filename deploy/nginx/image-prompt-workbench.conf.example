@@ -1,0 +1,42 @@
+# 示例：公用 Nginx 上为 Image Prompt Workbench 配置独立域名。
+# 将 server_name、证书路径、root、data 目录换成实际路径后，放入 conf.d 并 reload。
+#
+# 域名指向前端站点根目录（frontend/dist），同源提供：
+#   /           → SPA 静态资源
+#   /api/       → 反代 FastAPI 后端
+#   /media/     → 映射仓库 data/（示例图等），浏览器可直接 <img src="/media/...">
+
+server {
+    listen 443 ssl;
+    server_name image-prompt-workbench.xyz365.tech;
+
+    # ssl_certificate     /path/to/fullchain.pem;
+    # ssl_certificate_key /path/to/privkey.pem;
+
+    # 前端构建产物目录
+    root /srv/image-prompt-workbench/frontend/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 后端 API（登录、欢迎、卡片列表等）
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # 静态媒体：/media/prompt-images/0001-01.jpg → data/prompt-images/0001-01.jpg
+    # alias 末尾斜杠与 location 末尾斜杠需成对出现
+    location /media/ {
+        alias /srv/image-prompt-workbench/data/;
+        access_log off;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+}

@@ -27,7 +27,7 @@ AUTH_PASSWORD_HASH='your-generated-argon2id-hash'
 
 ```bash
 cd backend
-uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
 在第二个终端启动前端开发服务器：
@@ -132,7 +132,67 @@ python -m app.import_prompt_cards --source-url "https://github.com/用户/仓库
 同一卡片 JPG/PNG 混用时当前只打印警告，不做格式转换。
 重复导入策略暂不处理。
 
-登录后，前端通过受 Bearer Token 保护的 `/api/prompt-cards` 与 `/api/prompt-cards/{id}/images/{index}` 加载卡片与图片。
+登录后，前端通过受 Bearer Token 保护的 `GET /api/prompt-cards` 拉取卡片元数据。  
+接口中每张图返回：
+
+- `path`：相对 `data/` 的路径，例如 `prompt-images/0001-01.jpg`
+- `url`：同源公开地址，例如 `/media/prompt-images/0001-01.jpg`
+
+浏览器用普通 `<img src={url}>` 加载图片，**不再**经 API 鉴权拉二进制，也**不需要** `blob:` URL。
+
+开发时 Vite 将 `/media/*` 映射到仓库 `data/*`；生产由 Nginx 将 `/media/` alias 到服务器上的 `data/` 目录（见下文）。
+
+## 静态图片与部署（域名指向前端根）
+
+推荐形态：一个业务域名（例如 `image-prompt-workbench.xyz365.tech`）的 **站点根目录是前端构建产物**（`frontend/dist`），同一域名下再挂 API 与图片。
+
+```text
+https://image-prompt-workbench.xyz365.tech/
+  /              → 前端 SPA（root = frontend/dist）
+  /api/          → 反代本机 FastAPI（如 127.0.0.1:8000）
+  /media/        → 静态映射到 data/（图片等）
+```
+
+### 本地开发（Vite）
+
+`frontend/vite.config.ts` 已配置：
+
+- `/api` → 代理到 `http://127.0.0.1:8000`
+- `/media/...` → 读取仓库根目录 `data/...`
+
+因此开发时图片地址为：
+
+```text
+http://localhost:5173/media/prompt-images/0001-01.jpg
+```
+
+对应磁盘文件：
+
+```text
+data/prompt-images/0001-01.jpg
+```
+
+请同时启动后端与 `npm run dev`，先完成数据表初始化与导入后再打开前端。
+
+### 生产 Nginx（公用 Nginx + 独立域名）
+
+示例配置见 [`deploy/nginx/image-prompt-workbench.conf.example`](deploy/nginx/image-prompt-workbench.conf.example)。要点：
+
+1. `server_name` 设为业务域名；`root` 指向部署后的 `frontend/dist`。
+2. `location /api/` 反代到后端进程（勿把 API 当静态文件找）。
+3. `location /media/` 使用 `alias` 指向服务器上的 `data/` 目录（与导入图片目录一致）。
+4. SPA 使用 `try_files $uri $uri/ /index.html`。
+
+图片 URL 在生产环境同样是同源路径，例如：
+
+```text
+https://image-prompt-workbench.xyz365.tech/media/prompt-images/0001-01.jpg
+```
+
+说明：
+
+- 卡片列表仍需登录；示例图 URL 本身为公开静态资源（知道完整 URL 即可访问）。若必须对图片也做鉴权，需改回 API 出图或 Cookie/签名方案。
+- 公用 Nginx 上为每个站点使用独立 `server { server_name ... }` 即可，互不影响。
 
 ## 测试与构建
 
@@ -162,7 +222,7 @@ docker compose up -d --build
 后端容器的启动命令：
 
 ```text
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 ```
 
 Compose 只将容器绑定到 `127.0.0.1:8000:8000`，并挂载 `./data:/app/data`。`data/` 用于保存运行时状态，包括预留的 SQLite 文件和本地图片目录。不要提交运行时 SQLite 文件或生成的图片。

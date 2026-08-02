@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from app.prompt_card_images import derive_image_paths, get_image_media_type
+from app.prompt_card_images import (
+    build_public_image_refs,
+    derive_image_paths,
+    get_image_media_type,
+)
 
 
 def test_derive_image_paths_uses_first_extension(tmp_path: Path) -> None:
@@ -31,3 +35,12 @@ def test_derive_image_paths_rejects_unsupported_extension(tmp_path: Path) -> Non
 def test_get_image_media_type_for_jpg_and_png(tmp_path: Path) -> None:
     assert get_image_media_type(tmp_path / "a.jpg") == "image/jpeg"
     assert get_image_media_type(tmp_path / "b.png") == "image/png"
+
+
+def test_build_public_image_refs_uses_media_prefix() -> None:
+    refs = build_public_image_refs("prompt-images/0001-01.jpg", 2)
+
+    assert refs == [
+        (1, "prompt-images/0001-01.jpg", "/media/prompt-images/0001-01.jpg"),
+        (2, "prompt-images/0001-02.jpg", "/media/prompt-images/0001-02.jpg"),
+    ]
