@@ -67,10 +67,9 @@ test("示例图可从第一张切换到第二张", async () => {
     "src",
     "/media/prompt-images/0001-01.jpg",
   );
-  expect(screen.getByAltText("提示词示例图").parentElement).toHaveClass(
-    "generation-example-image-frame",
-  );
-  expect(screen.queryByRole("button", { name: "第 1 张" })).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "全屏预览示例图" }),
+  ).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "下一张示例图" }));
 
@@ -78,6 +77,29 @@ test("示例图可从第一张切换到第二张", async () => {
     "src",
     "/media/prompt-images/0001-02.jpg",
   );
+});
+
+test("点击示例图打开与首页相同的全屏预览并可切换", async () => {
+  const user = userEvent.setup();
+  renderWorkspace();
+
+  await user.click(screen.getByRole("button", { name: "全屏预览示例图" }));
+  const lightbox = screen.getByRole("dialog", { name: "大图预览" });
+  expect(lightbox).toBeInTheDocument();
+  expect(screen.getByText("1/2")).toBeInTheDocument();
+  expect(lightbox.querySelector("img")).toHaveAttribute(
+    "src",
+    "/media/prompt-images/0001-01.jpg",
+  );
+
+  await user.click(screen.getByRole("button", { name: "下一张" }));
+  expect(screen.getByText("2/2")).toBeInTheDocument();
+  expect(
+    screen.getByRole("dialog", { name: "大图预览" }).querySelector("img"),
+  ).toHaveAttribute("src", "/media/prompt-images/0001-02.jpg");
+
+  await user.click(screen.getByRole("button", { name: "关闭预览" }));
+  expect(screen.queryByRole("dialog", { name: "大图预览" })).not.toBeInTheDocument();
 });
 
 test("参考图初始提供四个添加位，并在分批选择时追加预览和正确释放对象 URL", async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { PromptCard } from "../api";
+import { ImageLightbox } from "./ImageLightbox";
 
 export type GenerationWorkspacePageProps = {
   card: PromptCard;
@@ -42,17 +43,25 @@ export function GenerationWorkspacePage({
     initialGenerationParams,
   );
   const [submitted, setSubmitted] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [failedExampleKeys, setFailedExampleKeys] = useState<
+    Record<string, true>
+  >({});
   const referenceImageUrlsRef = useRef<string[]>([]);
   const safeIndex = Math.min(
     Math.max(exampleImageIndex, 0),
     Math.max(images.length - 1, 0),
   );
   const exampleImage = images[safeIndex];
+  const exampleImageKey = `${card.id}:${safeIndex}`;
+  const exampleImageFailed = Boolean(failedExampleKeys[exampleImageKey]);
 
   useEffect(() => {
     setPrompt(card.prompt_text ?? "");
     setExampleImageIndex(0);
     setSubmitted(false);
+    setLightboxOpen(false);
+    setFailedExampleKeys({});
   }, [card.id, card.prompt_text]);
 
   useEffect(() => {
@@ -113,7 +122,30 @@ export function GenerationWorkspacePage({
           {exampleImage ? (
             <>
               <div className="generation-example-image-frame">
-                <img src={exampleImage.url} alt="提示词示例图" />
+                <button
+                  type="button"
+                  className="generation-example-image-hit"
+                  aria-label="全屏预览示例图"
+                  onClick={() => setLightboxOpen(true)}
+                >
+                  {exampleImageFailed ? (
+                    <span className="generation-example-image-empty">
+                      暂无图片
+                    </span>
+                  ) : (
+                    <img
+                      src={exampleImage.url}
+                      alt="提示词示例图"
+                      onError={() =>
+                        setFailedExampleKeys((current) =>
+                          current[exampleImageKey]
+                            ? current
+                            : { ...current, [exampleImageKey]: true },
+                        )
+                      }
+                    />
+                  )}
+                </button>
                 {images.length > 1 && (
                   <>
                     <button
@@ -122,6 +154,7 @@ export function GenerationWorkspacePage({
                       aria-label="上一张示例图"
                       disabled={safeIndex === 0}
                       onClick={(event) => {
+                        event.stopPropagation();
                         setExampleImageIndex((index) => Math.max(0, index - 1));
                         event.currentTarget.blur();
                       }}
@@ -148,6 +181,7 @@ export function GenerationWorkspacePage({
                       aria-label="下一张示例图"
                       disabled={safeIndex >= images.length - 1}
                       onClick={(event) => {
+                        event.stopPropagation();
                         setExampleImageIndex((index) =>
                           Math.min(images.length - 1, index + 1),
                         );
@@ -343,6 +377,32 @@ export function GenerationWorkspacePage({
           )}
         </section>
       </div>
+
+      {lightboxOpen && exampleImage && (
+        <ImageLightbox
+          title={card.title}
+          imageUrl={exampleImageFailed ? null : exampleImage.url}
+          imageFailed={exampleImageFailed}
+          currentIndex={safeIndex + 1}
+          total={images.length}
+          onClose={() => setLightboxOpen(false)}
+          onPrev={() =>
+            setExampleImageIndex((index) => Math.max(0, index - 1))
+          }
+          onNext={() =>
+            setExampleImageIndex((index) =>
+              Math.min(images.length - 1, index + 1),
+            )
+          }
+          onImageError={() =>
+            setFailedExampleKeys((current) =>
+              current[exampleImageKey]
+                ? current
+                : { ...current, [exampleImageKey]: true },
+            )
+          }
+        />
+      )}
     </section>
   );
 }

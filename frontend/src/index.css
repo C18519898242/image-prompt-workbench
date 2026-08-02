@@ -1008,7 +1008,21 @@ select:focus-visible {
   background: #f3f4f6;
 }
 
-.generation-example-image-frame img {
+.generation-example-image-hit {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.generation-example-image-hit img {
   position: absolute;
   inset: 0;
   display: block;
@@ -1016,6 +1030,16 @@ select:focus-visible {
   height: 100%;
   object-fit: contain;
   object-position: center;
+  pointer-events: none;
+}
+
+.generation-example-image-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
 }
 
 /* 箭头默认透明但可命中；只有鼠标移到箭头上才显示 */
@@ -1060,10 +1084,12 @@ select:focus-visible {
 
 .generation-example-nav-prev {
   left: 0.65rem;
+  z-index: 3;
 }
 
 .generation-example-nav-next {
   right: 0.65rem;
+  z-index: 3;
 }
 
 .generation-example-hint {
