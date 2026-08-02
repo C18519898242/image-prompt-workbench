@@ -605,21 +605,13 @@ select:focus-visible {
   display: grid;
   place-items: center;
   padding: 1.25rem;
-}
-
-.image-lightbox-backdrop {
-  position: absolute;
-  inset: 0;
-  border: none;
-  margin: 0;
-  padding: 0;
-  background: rgb(15 23 42 / 78%);
+  /* 整层实色遮罩，避免透明层卡住导致“白屏点不动” */
+  background: rgb(17 24 39 / 88%);
   cursor: zoom-out;
 }
 
 .image-lightbox-panel {
   position: relative;
-  z-index: 1;
   width: min(100%, 64rem);
   max-height: min(92vh, 48rem);
   display: grid;
@@ -630,6 +622,7 @@ select:focus-visible {
   background: #1f2937;
   box-shadow: 0 1.25rem 3rem rgb(0 0 0 / 45%);
   color: #f9fafb;
+  cursor: default;
 }
 
 .image-lightbox-header {
