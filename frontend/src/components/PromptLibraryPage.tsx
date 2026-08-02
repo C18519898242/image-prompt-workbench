@@ -8,8 +8,8 @@ import {
   type PromptCard,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
+import { ImageLightbox } from "./ImageLightbox";
 import { PromptCardCard } from "./PromptCardCard";
-import { PromptCardDialog } from "./PromptCardDialog";
 
 export type LibraryFilters = {
   query: string;
@@ -124,7 +124,7 @@ export function PromptLibraryPage({
     setCurrentIndex(1);
   };
 
-  const closeDialog = () => {
+  const closeLightbox = () => {
     setSelectedCardId(null);
     setCurrentIndex(1);
   };
@@ -226,9 +226,10 @@ export function PromptLibraryPage({
       )}
 
       {selectedCard && (
-        <PromptCardDialog
-          card={selectedCard}
+        <ImageLightbox
+          title={selectedCard.title}
           currentIndex={currentIndex}
+          total={selectedCard.image_count}
           imageUrl={
             selectedCard.images.find((image) => image.index === currentIndex)
               ?.url ?? null
@@ -239,30 +240,13 @@ export function PromptLibraryPage({
           onImageError={() =>
             markFailed(imageKey(selectedCard.id, currentIndex))
           }
-          thumbnailUrls={Object.fromEntries(
-            selectedCard.images.map((image) => [image.index, image.url]),
-          )}
-          failedThumbnails={Object.fromEntries(
-            selectedCard.images.map((image) => [
-              image.index,
-              Boolean(failedImages[imageKey(selectedCard.id, image.index)]),
-            ]),
-          )}
-          onThumbnailError={(index) =>
-            markFailed(imageKey(selectedCard.id, index))
-          }
-          onClose={closeDialog}
+          onClose={closeLightbox}
           onPrev={() => setCurrentIndex((index) => Math.max(1, index - 1))}
           onNext={() =>
             setCurrentIndex((index) =>
               Math.min(selectedCard.image_count, index + 1),
             )
           }
-          onSelectIndex={setCurrentIndex}
-          onUsePrompt={() => {
-            closeDialog();
-            onUsePrompt(selectedCard.id);
-          }}
         />
       )}
     </section>

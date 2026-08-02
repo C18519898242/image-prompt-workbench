@@ -161,15 +161,19 @@ test("点击使用此提示词会回调 card id", async () => {
   expect(onUsePrompt).toHaveBeenCalled();
 });
 
-test("点击封面可打开预览轮播", async () => {
+test("点击封面可打开全屏大图预览", async () => {
   const user = userEvent.setup();
   renderLibrary();
 
   await user.click(await screen.findByRole("button", { name: "预览 赛博城市" }));
-  const dialog = screen.getByRole("dialog");
+  const dialog = screen.getByRole("dialog", { name: "大图预览" });
   expect(dialog).toBeInTheDocument();
-  expect(dialog).toHaveTextContent("霓虹夜景");
+  expect(dialog).toHaveTextContent("赛博城市");
   expect(screen.getByText("1 / 2")).toBeInTheDocument();
+  expect(dialog.querySelector("img")).toHaveAttribute(
+    "src",
+    "/media/prompt-images/0002-01.png",
+  );
 });
 
 test("首页不渲染生成参数或参考图区域", async () => {

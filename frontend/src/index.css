@@ -597,6 +597,144 @@ select:focus-visible {
   cursor: pointer;
 }
 
+/* —— 全屏大图预览（类似设计稿深色画廊） —— */
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgb(15 23 42 / 72%);
+  backdrop-filter: blur(2px);
+}
+
+.image-lightbox-panel {
+  width: min(100%, 64rem);
+  max-height: min(92vh, 48rem);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem 1.25rem;
+  border-radius: 1rem;
+  background: #1f2937;
+  box-shadow: 0 1.25rem 3rem rgb(0 0 0 / 45%);
+  color: #f9fafb;
+}
+
+.image-lightbox-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.image-lightbox-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+  min-width: 0;
+}
+
+.image-lightbox-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.image-lightbox-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 45%);
+  color: #f3f4f6;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.image-lightbox-close {
+  appearance: none;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+  color: #f9fafb;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.image-lightbox-close:hover {
+  background: rgb(255 255 255 / 18%);
+}
+
+.image-lightbox-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 16rem;
+  max-height: min(72vh, 38rem);
+  border-radius: 0.75rem;
+  background: #111827;
+  overflow: hidden;
+}
+
+.image-lightbox-image {
+  display: block;
+  max-width: 100%;
+  max-height: min(72vh, 38rem);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
+.image-lightbox-empty {
+  color: #9ca3af;
+  font-size: 0.95rem;
+}
+
+.image-lightbox-nav {
+  appearance: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: rgb(17 24 39 / 72%);
+  color: #fff;
+  font-size: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 0.25rem 0.75rem rgb(0 0 0 / 35%);
+}
+
+.image-lightbox-nav:hover {
+  background: rgb(17 24 39 / 88%);
+}
+
+.image-lightbox-nav-prev {
+  left: 0.75rem;
+}
+
+.image-lightbox-nav-next {
+  right: 0.75rem;
+}
+
 .prompt-card-carousel-controls {
   display: flex;
   align-items: center;

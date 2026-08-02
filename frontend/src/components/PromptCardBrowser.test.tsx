@@ -76,22 +76,23 @@ test("显示首图和图片数量", async () => {
   ).toBeInTheDocument();
 });
 
-test("点击卡片封面后显示轮播和完整提示词", async () => {
+test("点击封面打开全屏大图预览", async () => {
   const user = userEvent.setup();
   renderBrowser();
 
   await user.click(await screen.findByRole("button", { name: "预览 多图卡片" }));
 
-  const dialog = screen.getByRole("dialog");
-  expect(dialog).toBeInTheDocument();
-  expect(dialog).toHaveTextContent("完整提示词内容");
+  const lightbox = screen.getByRole("dialog", { name: "大图预览" });
+  expect(lightbox).toBeInTheDocument();
+  expect(lightbox).toHaveTextContent("多图卡片");
   expect(screen.getByText("1 / 2")).toBeInTheDocument();
-  const stageImage = dialog.querySelector(".prompt-card-stage img");
-  expect(stageImage).toHaveAttribute("src", "/media/prompt-images/0001-01.jpg");
-  expect(screen.queryByRole("link", { name: "立即生成" })).not.toBeInTheDocument();
+  expect(lightbox.querySelector("img")).toHaveAttribute(
+    "src",
+    "/media/prompt-images/0001-01.jpg",
+  );
 });
 
-test("点击下一张后显示第二张序号", async () => {
+test("全屏预览可切换下一张", async () => {
   const user = userEvent.setup();
   renderBrowser();
 
@@ -99,25 +100,19 @@ test("点击下一张后显示第二张序号", async () => {
   await user.click(screen.getByRole("button", { name: "下一张" }));
 
   expect(screen.getByText("2 / 2")).toBeInTheDocument();
-  const stageImage = screen
-    .getByRole("dialog")
-    .querySelector(".prompt-card-stage img");
-  expect(stageImage).toHaveAttribute("src", "/media/prompt-images/0001-02.jpg");
+  const lightbox = screen.getByRole("dialog", { name: "大图预览" });
+  expect(lightbox.querySelector("img")).toHaveAttribute(
+    "src",
+    "/media/prompt-images/0001-02.jpg",
+  );
 });
 
-test("点击大图可打开预览并关闭", async () => {
+test("全屏预览可关闭", async () => {
   const user = userEvent.setup();
   renderBrowser();
 
   await user.click(await screen.findByRole("button", { name: "预览 多图卡片" }));
-  await user.click(screen.getByRole("button", { name: "预览大图" }));
-
-  const lightbox = screen.getByRole("dialog", { name: "大图预览" });
-  expect(lightbox).toBeInTheDocument();
-  expect(lightbox.querySelector("img")).toHaveAttribute(
-    "src",
-    "/media/prompt-images/0001-01.jpg",
-  );
+  expect(screen.getByRole("dialog", { name: "大图预览" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "关闭预览" }));
   expect(screen.queryByRole("dialog", { name: "大图预览" })).not.toBeInTheDocument();
