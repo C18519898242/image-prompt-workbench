@@ -979,6 +979,16 @@ select:focus-visible {
   color: #374151;
   box-shadow: 0 0.15rem 0.5rem rgb(15 23 42 / 18%);
   cursor: pointer;
+  /* 默认隐藏，悬停示例图区域时显示 */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.generation-example-image-frame:hover .generation-example-nav,
+.generation-example-image-frame:focus-within .generation-example-nav {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .generation-example-nav:hover:not(:disabled) {
@@ -987,8 +997,13 @@ select:focus-visible {
 }
 
 .generation-example-nav:disabled {
-  opacity: 0.35;
+  opacity: 0;
   cursor: not-allowed;
+}
+
+.generation-example-image-frame:hover .generation-example-nav:disabled,
+.generation-example-image-frame:focus-within .generation-example-nav:disabled {
+  opacity: 0.35;
 }
 
 .generation-example-nav-prev {
