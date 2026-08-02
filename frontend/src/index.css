@@ -940,14 +940,14 @@ select:focus-visible {
   cursor: not-allowed;
 }
 
-/* 示例图：固定 4:3，图片 contain 居中，不因比例改变框高 */
+/* 示例图：固定 4:3，图片 contain 居中；左右圆形翻页（参考 YouMind） */
 .generation-example-image-frame {
   position: relative;
   width: 100%;
   aspect-ratio: 4 / 3;
   overflow: hidden;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 0.75rem;
   background: #f3f4f6;
 }
 
@@ -961,33 +961,81 @@ select:focus-visible {
   object-position: center;
 }
 
+.generation-example-nav {
+  appearance: none;
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 88%);
+  color: #374151;
+  box-shadow: 0 0.15rem 0.5rem rgb(15 23 42 / 18%);
+  cursor: pointer;
+}
+
+.generation-example-nav:hover:not(:disabled) {
+  background: #fff;
+  color: #111827;
+}
+
+.generation-example-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.generation-example-nav-prev {
+  left: 0.65rem;
+}
+
+.generation-example-nav-next {
+  right: 0.65rem;
+}
+
+.generation-example-dots {
+  position: absolute;
+  left: 50%;
+  bottom: 0.65rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.4rem;
+  border-radius: 999px;
+  background: rgb(15 23 42 / 28%);
+}
+
+.generation-example-dot {
+  appearance: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 55%);
+  cursor: pointer;
+}
+
+.generation-example-dot.is-active {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: #fff;
+}
+
 .generation-example-hint {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.875rem;
   font-weight: 400;
-}
-
-.generation-example-controls {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.generation-example-controls > button:first-child {
-  justify-self: start;
-}
-
-.generation-example-controls > span {
-  justify-self: center;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-}
-
-.generation-example-controls > button:last-child {
-  justify-self: end;
 }
 
 .generation-reference-image-grid {

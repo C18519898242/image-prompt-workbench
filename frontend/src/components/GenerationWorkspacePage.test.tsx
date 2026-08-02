@@ -61,7 +61,10 @@ test("示例图可从第一张切换到第二张", async () => {
   const user = userEvent.setup();
   renderWorkspace();
 
-  expect(screen.getByText("1 / 2")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "第 1 张" })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
   expect(screen.getByAltText("提示词示例图")).toHaveAttribute(
     "src",
     "/media/prompt-images/0001-01.jpg",
@@ -72,7 +75,10 @@ test("示例图可从第一张切换到第二张", async () => {
 
   await user.click(screen.getByRole("button", { name: "下一张示例图" }));
 
-  expect(screen.getByText("2 / 2")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "第 2 张" })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
   expect(screen.getByAltText("提示词示例图")).toHaveAttribute(
     "src",
     "/media/prompt-images/0001-02.jpg",
