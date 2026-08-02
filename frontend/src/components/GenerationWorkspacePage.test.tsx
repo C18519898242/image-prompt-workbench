@@ -35,6 +35,13 @@ function renderWorkspace() {
   return render(<GenerationWorkspacePage card={card} onBack={vi.fn()} />);
 }
 
+function optionValues(label: string) {
+  return Array.from(
+    (screen.getByLabelText(label) as HTMLSelectElement).options,
+    (option) => option.value,
+  );
+}
+
 test("显示生成工作台的必要区域，且没有清空或字符数功能", () => {
   renderWorkspace();
 
@@ -64,6 +71,8 @@ test("示例图可从第一张切换到第二张", async () => {
   });
   expect(screen.getByAltText("提示词示例图")).toHaveStyle({
     objectFit: "contain",
+    width: "100%",
+    height: "100%",
   });
 
   await user.click(screen.getByRole("button", { name: "下一张示例图" }));
@@ -98,6 +107,11 @@ test("参考图支持多张预览、单张删除、替换和卸载时释放对�
   expect(createObjectURL).toHaveBeenCalledWith(firstFile);
   expect(createObjectURL).toHaveBeenCalledWith(secondFile);
   expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(2);
+  expect(screen.getAllByAltText("生成参考图预览")[0]).toHaveStyle({
+    objectFit: "contain",
+    width: "100%",
+    height: "100%",
+  });
   expect(
     screen.getAllByAltText("生成参考图预览")[0].parentElement?.parentElement,
   ).toHaveStyle({
@@ -152,6 +166,11 @@ test("高级参数可展开和收起，且不显示随机种子", async () => {
   expect(screen.getByLabelText("分辨率")).toHaveValue("1K");
   expect(screen.getByLabelText("生成数量")).toHaveValue("1");
   expect(screen.getByLabelText("思考级别")).toHaveValue("中等");
+  expect(optionValues("模型")).toEqual(["Nano Banana 2"]);
+  expect(optionValues("比例")).toEqual(["1:1", "4:3", "16:9"]);
+  expect(optionValues("分辨率")).toEqual(["1K", "2K"]);
+  expect(optionValues("生成数量")).toEqual(["1", "2", "4"]);
+  expect(optionValues("思考级别")).toEqual(["低", "中等", "高"]);
   expect(screen.getByLabelText("模型")).toHaveTextContent("Nano Banana 2");
   expect(screen.getByLabelText("思考级别")).toHaveTextContent("低中等高");
   expect(screen.queryByLabelText(/随机种子/)).not.toBeInTheDocument();

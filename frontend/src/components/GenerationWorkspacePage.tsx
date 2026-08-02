@@ -67,7 +67,7 @@ export function GenerationWorkspacePage({
               <img
                 src={exampleImage.url}
                 alt="提示词示例图"
-                style={{ objectFit: "contain" }}
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
               />
             </div>
             <p>仅用于理解效果</p>
@@ -139,7 +139,11 @@ export function GenerationWorkspacePage({
           >
             {referenceImages.map((image) => (
               <div key={image.url}>
-                <img src={image.url} alt="生成参考图预览" />
+                <img
+                  src={image.url}
+                  alt="生成参考图预览"
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                />
                 <button
                   type="button"
                   aria-label={`删除生成参考图：${image.name}`}
