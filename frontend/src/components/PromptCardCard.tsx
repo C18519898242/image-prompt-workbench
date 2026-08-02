@@ -5,8 +5,6 @@ type PromptCardCardProps = {
   imageUrl: string | null;
   imageFailed: boolean;
   onImageError: () => void;
-  favorited: boolean;
-  onToggleFavorite: () => void;
   onUsePrompt: () => void;
   onPreview?: () => void;
 };
@@ -16,8 +14,6 @@ export function PromptCardCard({
   imageUrl,
   imageFailed,
   onImageError,
-  favorited,
-  onToggleFavorite,
   onUsePrompt,
   onPreview,
 }: PromptCardCardProps) {
@@ -60,21 +56,7 @@ export function PromptCardCard({
         )}
       </div>
       <div className="prompt-card-body">
-        <div className="prompt-card-title-row">
-          <h2 className="prompt-card-title">{card.title}</h2>
-          <button
-            type="button"
-            className={
-              favorited
-                ? "prompt-card-favorite is-active"
-                : "prompt-card-favorite"
-            }
-            aria-label={favorited ? "取消收藏" : "收藏"}
-            onClick={onToggleFavorite}
-          >
-            {favorited ? "★" : "☆"}
-          </button>
-        </div>
+        <h2 className="prompt-card-title">{card.title}</h2>
         {card.categories.length > 0 && (
           <ul className="prompt-card-tags">
             {card.categories.map((category) => (

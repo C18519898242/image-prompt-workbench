@@ -10,9 +10,7 @@ import { WorkspacePlaceholder } from "./WorkspacePlaceholder";
 
 export type AppView =
   | { name: "library" }
-  | { name: "workspace"; cardId: number | null }
-  | { name: "history-placeholder" }
-  | { name: "settings-placeholder" };
+  | { name: "workspace"; cardId: number | null };
 
 type AppShellProps = {
   token: string;
@@ -52,31 +50,9 @@ export function AppShell({ token }: AppShellProps) {
             >
               提示词库
             </button>
-            <button
-              type="button"
-              className={
-                view.name === "workspace"
-                  ? "app-shell-nav-btn is-active"
-                  : "app-shell-nav-btn"
-              }
-              onClick={() => setView({ name: "workspace", cardId: null })}
-            >
-              生成工作台
-            </button>
           </nav>
         </div>
         <div className="app-shell-actions">
-          <button
-            type="button"
-            className={
-              view.name === "history-placeholder"
-                ? "app-shell-nav-btn is-active"
-                : "app-shell-nav-btn"
-            }
-            onClick={() => setView({ name: "history-placeholder" })}
-          >
-            历史
-          </button>
           <LogoutButton />
         </div>
       </header>
@@ -95,25 +71,6 @@ export function AppShell({ token }: AppShellProps) {
             cardId={view.cardId}
             onBack={() => setView({ name: "library" })}
           />
-        )}
-        {view.name === "history-placeholder" && (
-          <section className="workspace-placeholder">
-            <h1>生成历史</h1>
-            <p>生成历史页即将推出。</p>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setView({ name: "library" })}
-            >
-              返回提示词库
-            </button>
-          </section>
-        )}
-        {view.name === "settings-placeholder" && (
-          <section className="workspace-placeholder">
-            <h1>设置</h1>
-            <p>设置页即将推出。</p>
-          </section>
         )}
       </main>
     </div>

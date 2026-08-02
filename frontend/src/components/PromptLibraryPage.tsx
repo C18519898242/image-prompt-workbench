@@ -8,11 +8,6 @@ import {
   type PromptCard,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import {
-  isFavoriteId,
-  loadFavoriteIds,
-  toggleFavoriteId,
-} from "../lib/favorites";
 import { PromptCardCard } from "./PromptCardCard";
 import { PromptCardDialog } from "./PromptCardDialog";
 
@@ -20,14 +15,12 @@ export type LibraryFilters = {
   query: string;
   categoryId: number | null;
   sort: "newest" | "oldest" | "title";
-  favoritesOnly: boolean;
 };
 
 export const defaultLibraryFilters: LibraryFilters = {
   query: "",
   categoryId: null,
   sort: "newest",
-  favoritesOnly: false,
 };
 
 type PromptLibraryPageProps = {
@@ -40,7 +33,6 @@ type PromptLibraryPageProps = {
 export function filterPromptCards(
   cards: PromptCard[],
   filters: LibraryFilters,
-  favoriteIds: number[],
 ): PromptCard[] {
   let result = cards;
   const query = filters.query.trim().toLowerCase();
@@ -55,9 +47,6 @@ export function filterPromptCards(
     result = result.filter((card) =>
       card.category_ids.includes(filters.categoryId!),
     );
-  }
-  if (filters.favoritesOnly) {
-    result = result.filter((card) => favoriteIds.includes(card.id));
   }
   const sorted = [...result];
   if (filters.sort === "title") {
@@ -81,9 +70,6 @@ export function PromptLibraryPage({
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [favoriteIds, setFavoriteIds] = useState<number[]>(() =>
-    loadFavoriteIds(),
-  );
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
   const [currentIndex, setCurrentIndex] = useState(1);
   const [failedImages, setFailedImages] = useState<Record<string, true>>({});
@@ -124,8 +110,8 @@ export function PromptLibraryPage({
   }, [clearToken, token]);
 
   const visibleCards = useMemo(
-    () => filterPromptCards(cards, filters, favoriteIds),
-    [cards, filters, favoriteIds],
+    () => filterPromptCards(cards, filters),
+    [cards, filters],
   );
 
   const selectedCard = useMemo(
@@ -213,22 +199,6 @@ export function PromptLibraryPage({
             {category.name}
           </button>
         ))}
-        <button
-          type="button"
-          className={
-            filters.favoritesOnly
-              ? "library-chip library-chip-favorites is-active"
-              : "library-chip library-chip-favorites"
-          }
-          onClick={() =>
-            onFiltersChange({
-              ...filters,
-              favoritesOnly: !filters.favoritesOnly,
-            })
-          }
-        >
-          ☆ 收藏
-        </button>
       </div>
 
       {cards.length === 0 ? (
@@ -247,8 +217,6 @@ export function PromptLibraryPage({
                 imageUrl={first?.url ?? null}
                 imageFailed={Boolean(failedImages[key])}
                 onImageError={() => markFailed(key)}
-                favorited={isFavoriteId(card.id, favoriteIds)}
-                onToggleFavorite={() => setFavoriteIds(toggleFavoriteId(card.id))}
                 onUsePrompt={() => onUsePrompt(card.id)}
                 onPreview={() => openPreview(card)}
               />

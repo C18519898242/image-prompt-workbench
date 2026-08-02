@@ -126,18 +126,16 @@ test("按关键词过滤标题与提示词", async () => {
 });
 
 test("filterPromptCards 按关键词与分类过滤", () => {
-  const byQuery = filterPromptCards(
-    [cardA, cardB],
-    { ...defaultLibraryFilters, query: "赛博" },
-    [],
-  );
+  const byQuery = filterPromptCards([cardA, cardB], {
+    ...defaultLibraryFilters,
+    query: "赛博",
+  });
   expect(byQuery.map((card) => card.title)).toEqual(["赛博城市"]);
 
-  const byCategory = filterPromptCards(
-    [cardA, cardB],
-    { ...defaultLibraryFilters, categoryId: 1 },
-    [],
-  );
+  const byCategory = filterPromptCards([cardA, cardB], {
+    ...defaultLibraryFilters,
+    categoryId: 1,
+  });
   expect(byCategory.map((card) => card.title)).toEqual(["江南烟雨"]);
 });
 

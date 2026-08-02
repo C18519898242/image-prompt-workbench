@@ -99,8 +99,9 @@ test("logs in, shows prompt library navigation, and logs out", async () => {
 
   expect(await screen.findByRole("navigation")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "提示词库" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "生成工作台" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "历史" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "生成工作台" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "历史" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "☆ 收藏" })).not.toBeInTheDocument();
   expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "退出" }));
@@ -367,19 +368,42 @@ test("keeps the session and offers retry when logout fails", async () => {
   expect(fetchMock).toHaveBeenCalled();
 });
 
-test("navigates to workspace placeholder from library nav", async () => {
-  mockAuthedApis();
+test("使用此提示词进入工作台占位并可返回", async () => {
+  const card = {
+    id: 9,
+    title: "测试卡片",
+    prompt_text: "测试提示词",
+    sort_order: 1,
+    category_ids: [] as number[],
+    categories: [] as { id: number; name: string; sort_order: number }[],
+    image_count: 1,
+    example_image_path: "prompt-images/0001-01.jpg",
+    images: [
+      {
+        index: 1,
+        path: "prompt-images/0001-01.jpg",
+        url: "/media/prompt-images/0001-01.jpg",
+      },
+    ],
+  };
+  mockAuthedApis({
+    // Response body 只能读一次，返回时需重新构造
+    cards: async () => jsonResponse({ items: [card] }),
+  });
   const user = userEvent.setup();
   const password = crypto.randomUUID();
 
   renderApp();
   await user.type(screen.getByLabelText("密码"), password);
   await user.click(screen.getByRole("button", { name: "登录" }));
-  expect(await screen.findByRole("button", { name: "生成工作台" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "使用此提示词" })).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "生成工作台" }));
-  expect(screen.getByText("生成工作台即将推出。本页仅作为「使用此提示词」跳转占位。")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "使用此提示词" }));
+  expect(
+    screen.getByText("生成工作台即将推出。本页仅作为「使用此提示词」跳转占位。"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("已选择提示词卡片 ID：9")).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "提示词库" }));
-  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "返回提示词库" }));
+  expect(await screen.findByText("测试卡片")).toBeInTheDocument();
 });

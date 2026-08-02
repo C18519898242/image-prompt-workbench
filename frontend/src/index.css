@@ -372,10 +372,6 @@ select:focus-visible {
   color: var(--color-primary-text);
 }
 
-.library-chip-favorites {
-  margin-left: auto;
-}
-
 .prompt-card-status {
   margin: 1rem 0;
   color: var(--color-text-muted);
@@ -390,10 +386,6 @@ select:focus-visible {
 @media (max-width: 640px) {
   .prompt-card-grid {
     grid-template-columns: 1fr;
-  }
-
-  .library-chip-favorites {
-    margin-left: 0;
   }
 }
 
@@ -457,31 +449,10 @@ select:focus-visible {
   gap: 0.5rem;
 }
 
-.prompt-card-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
 .prompt-card-title {
   margin: 0;
   font-size: 1rem;
   line-height: 1.35;
-}
-
-.prompt-card-favorite {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  padding: 0.15rem 0.25rem;
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.prompt-card-favorite.is-active {
-  color: #ca8a04;
 }
 
 .prompt-card-tags {
