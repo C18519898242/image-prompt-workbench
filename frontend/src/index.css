@@ -1008,21 +1008,26 @@ select:focus-visible {
   background: #f3f4f6;
 }
 
-.generation-example-image-hit {
+/* 盖过 .generation-workspace button 的 width:fit-content，否则图被挤成一条 */
+.generation-workspace .generation-example-image-hit {
   appearance: none;
   position: absolute;
   inset: 0;
   z-index: 1;
   display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
   margin: 0;
   padding: 0;
   border: none;
   border-radius: inherit;
   background: transparent;
+  box-shadow: none;
   cursor: zoom-in;
 }
 
-.generation-example-image-hit img {
+.generation-workspace .generation-example-image-hit img {
   position: absolute;
   inset: 0;
   display: block;
