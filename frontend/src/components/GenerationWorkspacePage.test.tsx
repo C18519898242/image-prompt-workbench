@@ -180,24 +180,40 @@ test("基础参数始终可见且受控", async () => {
   expect(screen.getByLabelText("生成数量")).toBeInTheDocument();
   expect(screen.getByLabelText("思考级别")).toBeInTheDocument();
   expect(screen.getByLabelText("模型")).toHaveValue("Nano Banana 2");
-  expect(screen.getByLabelText("比例")).toHaveValue("4:3");
+  expect(screen.getByLabelText("比例")).toHaveValue("Auto");
   expect(screen.getByLabelText("分辨率")).toHaveValue("1K");
   expect(screen.getByLabelText("生成数量")).toHaveValue("1");
   expect(screen.getByLabelText("思考级别")).toHaveValue("中等");
   expect(optionValues("模型")).toEqual(["Nano Banana 2"]);
-  expect(optionValues("比例")).toEqual(["1:1", "4:3", "16:9"]);
+  expect(optionValues("比例")).toEqual([
+    "Auto",
+    "1:1",
+    "9:16",
+    "16:9",
+    "3:4",
+    "4:3",
+    "3:2",
+    "2:3",
+    "5:4",
+    "4:5",
+    "21:9",
+    "4:1",
+    "1:4",
+    "8:1",
+    "1:8",
+  ]);
   expect(optionValues("分辨率")).toEqual(["1K", "2K"]);
   expect(optionValues("生成数量")).toEqual(["1", "2", "4"]);
   expect(optionValues("思考级别")).toEqual(["低", "中等", "高"]);
   expect(screen.queryByRole("button", { name: "展开高级参数" })).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/随机种子/)).not.toBeInTheDocument();
 
-  await user.selectOptions(screen.getByLabelText("比例"), "16:9");
+  await user.selectOptions(screen.getByLabelText("比例"), "9:16");
   await user.selectOptions(screen.getByLabelText("分辨率"), "2K");
   await user.selectOptions(screen.getByLabelText("生成数量"), "4");
   await user.selectOptions(screen.getByLabelText("思考级别"), "高");
 
-  expect(screen.getByLabelText("比例")).toHaveValue("16:9");
+  expect(screen.getByLabelText("比例")).toHaveValue("9:16");
   expect(screen.getByLabelText("分辨率")).toHaveValue("2K");
   expect(screen.getByLabelText("生成数量")).toHaveValue("4");
   expect(screen.getByLabelText("思考级别")).toHaveValue("高");

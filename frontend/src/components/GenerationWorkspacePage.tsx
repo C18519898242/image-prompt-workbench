@@ -13,17 +13,52 @@ type ReferenceImage = {
   url: string;
 };
 
+type AspectRatio =
+  | "Auto"
+  | "1:1"
+  | "9:16"
+  | "16:9"
+  | "3:4"
+  | "4:3"
+  | "3:2"
+  | "2:3"
+  | "5:4"
+  | "4:5"
+  | "21:9"
+  | "4:1"
+  | "1:4"
+  | "8:1"
+  | "1:8";
+
 type GenerationParams = {
   model: "Nano Banana 2";
-  aspectRatio: "1:1" | "4:3" | "16:9";
+  aspectRatio: AspectRatio;
   resolution: "1K" | "2K";
   quantity: "1" | "2" | "4";
   thinkingLevel: "低" | "中等" | "高";
 };
 
+const aspectRatioOptions: AspectRatio[] = [
+  "Auto",
+  "1:1",
+  "9:16",
+  "16:9",
+  "3:4",
+  "4:3",
+  "3:2",
+  "2:3",
+  "5:4",
+  "4:5",
+  "21:9",
+  "4:1",
+  "1:4",
+  "8:1",
+  "1:8",
+];
+
 const initialGenerationParams: GenerationParams = {
   model: "Nano Banana 2",
-  aspectRatio: "4:3",
+  aspectRatio: "Auto",
   resolution: "1K",
   quantity: "1",
   thinkingLevel: "中等",
@@ -323,14 +358,15 @@ export function GenerationWorkspacePage({
                 onChange={(event) =>
                   setGenerationParams((params) => ({
                     ...params,
-                    aspectRatio: event.target
-                      .value as GenerationParams["aspectRatio"],
+                    aspectRatio: event.target.value as AspectRatio,
                   }))
                 }
               >
-                <option value="1:1">1:1</option>
-                <option value="4:3">4:3</option>
-                <option value="16:9">16:9</option>
+                {aspectRatioOptions.map((ratio) => (
+                  <option key={ratio} value={ratio}>
+                    {ratio}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
