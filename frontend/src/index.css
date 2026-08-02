@@ -1033,10 +1033,6 @@ select:focus-visible {
   font-size: 0.9rem;
 }
 
-.generation-advanced-parameters {
-  display: none;
-}
-
 .generation-workspace .generation-parameters-submit {
   width: 100%;
   border-color: var(--color-primary);

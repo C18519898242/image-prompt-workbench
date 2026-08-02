@@ -40,7 +40,6 @@ export function GenerationWorkspacePage({
   const [generationParams, setGenerationParams] = useState<GenerationParams>(
     initialGenerationParams,
   );
-  const [showAdvancedParameters, setShowAdvancedParameters] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const referenceImageUrlsRef = useRef<string[]>([]);
   const exampleImage = card.images[exampleImageIndex];
@@ -263,16 +262,6 @@ export function GenerationWorkspacePage({
               </select>
             </label>
           </div>
-          <button
-            type="button"
-            aria-expanded={showAdvancedParameters}
-            onClick={() => setShowAdvancedParameters((visible) => !visible)}
-          >
-            {showAdvancedParameters ? "收起高级参数" : "展开高级参数"}
-          </button>
-          {showAdvancedParameters && (
-            <div className="generation-advanced-parameters" />
-          )}
           <button
             className="generation-parameters-submit"
             type="button"

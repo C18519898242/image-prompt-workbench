@@ -149,7 +149,7 @@ test("空提示词禁用提交，填写提示词后显示本地提交反馈", as
   expect(screen.getByText("已创建本地生成任务（演示）")).toBeInTheDocument();
 });
 
-test("基础参数始终可见且受控，并在切换高级入口后保留选择", async () => {
+test("基础参数始终可见且受控", async () => {
   const user = userEvent.setup();
   renderWorkspace();
 
@@ -168,22 +168,18 @@ test("基础参数始终可见且受控，并在切换高级入口后保留选�
   expect(optionValues("分辨率")).toEqual(["1K", "2K"]);
   expect(optionValues("生成数量")).toEqual(["1", "2", "4"]);
   expect(optionValues("思考级别")).toEqual(["低", "中等", "高"]);
-  expect(screen.getByLabelText("模型")).toHaveTextContent("Nano Banana 2");
-  expect(screen.getByLabelText("思考级别")).toHaveTextContent("低中等高");
+  expect(screen.queryByRole("button", { name: "展开高级参数" })).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/随机种子/)).not.toBeInTheDocument();
 
   await user.selectOptions(screen.getByLabelText("比例"), "16:9");
   await user.selectOptions(screen.getByLabelText("分辨率"), "2K");
   await user.selectOptions(screen.getByLabelText("生成数量"), "4");
   await user.selectOptions(screen.getByLabelText("思考级别"), "高");
-  await user.click(screen.getByRole("button", { name: "展开高级参数" }));
-  await user.click(screen.getByRole("button", { name: "收起高级参数" }));
 
   expect(screen.getByLabelText("比例")).toHaveValue("16:9");
   expect(screen.getByLabelText("分辨率")).toHaveValue("2K");
   expect(screen.getByLabelText("生成数量")).toHaveValue("4");
   expect(screen.getByLabelText("思考级别")).toHaveValue("高");
-  expect(screen.queryByLabelText(/随机种子/)).not.toBeInTheDocument();
 });
 
 test("提交按钮和本地反馈位于参数面板内，且使用全宽主按钮样式", async () => {
