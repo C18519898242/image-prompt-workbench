@@ -1151,13 +1151,14 @@ select:focus-visible {
   background: #f3f4f6;
 }
 
+/* 固定 4:3 槽位；竖图 contain 左右留白居中，不裁切 */
 .generation-reference-image-card img {
   position: absolute;
   inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 
