@@ -71,18 +71,19 @@ export function GenerationWorkspacePage({
     };
   }, []);
 
-  const appendReferenceImages = (files: FileList) => {
+  const appendReferenceImages = (files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
     setReferenceImages((current) => {
       const remaining = maxReferenceImages - current.length;
       if (remaining <= 0) {
         return current;
       }
-      const nextImages = Array.from(files)
-        .slice(0, remaining)
-        .map((file) => ({
-          name: file.name,
-          url: URL.createObjectURL(file),
-        }));
+      const nextImages = files.slice(0, remaining).map((file) => ({
+        name: file.name,
+        url: URL.createObjectURL(file),
+      }));
       referenceImageUrlsRef.current = [
         ...referenceImageUrlsRef.current,
         ...nextImages.map((image) => image.url),
@@ -255,11 +256,14 @@ export function GenerationWorkspacePage({
             multiple
             hidden
             onChange={(event) => {
-              const files = event.target.files;
-              if (files?.length) {
+              // FileList 是 live 引用，必须在清空 input 前拷贝成数组
+              const files = event.target.files
+                ? Array.from(event.target.files)
+                : [];
+              event.target.value = "";
+              if (files.length > 0) {
                 appendReferenceImages(files);
               }
-              event.target.value = "";
             }}
           />
           {referenceImages.length > 0 && (
