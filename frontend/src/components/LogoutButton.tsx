@@ -6,35 +6,32 @@ export function LogoutButton() {
     <div className="logout-control">
       <button
         type="button"
-        className="btn btn-ghost app-shell-logout"
+        className="app-shell-icon-btn"
         onClick={() => void logout()}
+        aria-label={logoutError ? "重试退出登录" : "退出"}
       >
         <svg
-          className="app-shell-logout-icon"
           width="16"
           height="16"
           viewBox="0 0 24 24"
           fill="none"
           aria-hidden="true"
         >
+          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
           <path
-            d="M10 7V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-1"
+            d="M12 3v2.2M12 18.8V21M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3 12h2.2M18.8 12H21M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"
             stroke="currentColor"
             strokeWidth="1.6"
             strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M15 12H4m0 0 3-3m-3 3 3 3"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
           />
         </svg>
-        {logoutError ? "重试退出登录" : "退出"}
+        <span>{logoutError ? "重试退出" : "退出"}</span>
       </button>
-      {logoutError && <p role="alert">{logoutError}</p>}
+      {logoutError && (
+        <p className="logout-error" role="alert">
+          {logoutError}
+        </p>
+      )}
     </div>
   );
 }

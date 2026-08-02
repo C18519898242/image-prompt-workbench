@@ -27,42 +27,45 @@ export function AppShell({ token }: AppShellProps) {
   return (
     <div className="app-shell">
       <header className="app-shell-header">
-        <div className="app-shell-brand">
-          <span className="app-shell-brand-mark" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M9 3h6v2h1.5A2.5 2.5 0 0 1 19 7.5V9a5 5 0 0 1-2 4v3.5A2.5 2.5 0 0 1 14.5 19h-5A2.5 2.5 0 0 1 7 16.5V13a5 5 0 0 1-2-4V7.5A2.5 2.5 0 0 1 7.5 5H9V3Z"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
-          <span>Image Prompt Workbench</span>
+        <div className="app-shell-header-left">
+          <div className="app-shell-brand" aria-hidden="true">
+            <span className="app-shell-brand-mark">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M9 3h6v2h1.5A2.5 2.5 0 0 1 19 7.5V9a5 5 0 0 1-2 4v3.5A2.5 2.5 0 0 1 14.5 19h-5A2.5 2.5 0 0 1 7 16.5V13a5 5 0 0 1-2-4V7.5A2.5 2.5 0 0 1 7.5 5H9V3Z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+          </div>
+          <nav className="app-shell-nav" aria-label="主导航">
+            <button
+              type="button"
+              className={
+                view.name === "library"
+                  ? "app-shell-nav-btn is-active"
+                  : "app-shell-nav-btn"
+              }
+              onClick={() => setView({ name: "library" })}
+            >
+              提示词库
+            </button>
+            <button
+              type="button"
+              className={
+                view.name === "workspace"
+                  ? "app-shell-nav-btn is-active"
+                  : "app-shell-nav-btn"
+              }
+              onClick={() => setView({ name: "workspace", cardId: null })}
+            >
+              生成工作台
+            </button>
+          </nav>
         </div>
-        <nav className="app-shell-nav" aria-label="主导航">
-          <button
-            type="button"
-            className={
-              view.name === "library"
-                ? "app-shell-nav-btn is-active"
-                : "app-shell-nav-btn"
-            }
-            onClick={() => setView({ name: "library" })}
-          >
-            提示词库
-          </button>
-          <button
-            type="button"
-            className={
-              view.name === "workspace"
-                ? "app-shell-nav-btn is-active"
-                : "app-shell-nav-btn"
-            }
-            onClick={() => setView({ name: "workspace", cardId: null })}
-          >
-            生成工作台
-          </button>
+        <div className="app-shell-actions">
           <button
             type="button"
             className={
@@ -74,8 +77,6 @@ export function AppShell({ token }: AppShellProps) {
           >
             历史
           </button>
-        </nav>
-        <div className="app-shell-actions">
           <LogoutButton />
         </div>
       </header>
