@@ -92,7 +92,7 @@ export function GenerationWorkspacePage({
         </span>
         <span className="generation-breadcrumb-current">生成工作台</span>
         <span className="generation-breadcrumb-sep" aria-hidden="true">
-          {">"}
+          -
         </span>
         <span className="generation-breadcrumb-current" title={card.title}>
           {card.title}
