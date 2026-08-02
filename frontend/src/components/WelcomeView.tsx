@@ -1,42 +1,8 @@
-import { useEffect, useState } from "react";
+import { AppShell } from "./AppShell";
 
-import { ApiError, getWelcome } from "../api";
-import { useAuth } from "../auth/AuthContext";
-import { LogoutButton } from "./LogoutButton";
-import { PromptCardBrowser } from "./PromptCardBrowser";
-
+/**
+ * 兼容旧入口：登录后主界面已统一为 AppShell。
+ */
 export function WelcomeView({ token }: { token: string }) {
-  const { clearToken } = useAuth();
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void getWelcome(token)
-      .then((nextMessage) => {
-        if (!cancelled) setMessage(nextMessage);
-      })
-      .catch((requestError: unknown) => {
-        if (requestError instanceof ApiError && requestError.status === 401) {
-          clearToken(token);
-          return;
-        }
-        if (!cancelled) setError("欢迎信息加载失败");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clearToken, token]);
-
-  return (
-    <main className="app-shell">
-      <header className="app-shell-header">
-        {message && <p>{message}</p>}
-        {error && <p role="alert">{error}</p>}
-        <LogoutButton />
-      </header>
-      {message && <PromptCardBrowser token={token} />}
-    </main>
-  );
+  return <AppShell token={token} />;
 }

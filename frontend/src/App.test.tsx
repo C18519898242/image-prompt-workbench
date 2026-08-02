@@ -4,7 +4,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 
 import App from "./App";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
-import { WelcomeView } from "./components/WelcomeView";
+import { AppShell } from "./components/AppShell";
 
 function renderApp() {
   return render(
@@ -47,34 +47,49 @@ function emptyCardsResponse() {
   return new Response(JSON.stringify({ items: [] }), { status: 200 });
 }
 
+function emptyCategoriesResponse() {
+  return new Response(JSON.stringify({ items: [] }), { status: 200 });
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status });
 }
 
-beforeEach(() => {
-  vi.restoreAllMocks();
-  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
-  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-});
-
-test("logs in, loads the protected welcome message, and logs out", async () => {
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+function mockAuthedApis(options?: {
+  cards?: Response | (() => Promise<Response>);
+  categories?: Response;
+}) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
     if (url.includes("/api/auth/login") && method === "POST") {
       return jsonResponse({ token: "token-1" });
     }
-    if (url.includes("/api/welcome")) {
-      return jsonResponse({ message: "欢迎使用 Image Prompt Workbench" });
+    if (url.includes("/api/categories")) {
+      return options?.categories ?? emptyCategoriesResponse();
     }
     if (url.includes("/api/prompt-cards")) {
-      return emptyCardsResponse();
+      if (typeof options?.cards === "function") {
+        return options.cards();
+      }
+      return options?.cards ?? emptyCardsResponse();
     }
     if (url.includes("/api/auth/logout") && method === "POST") {
       return new Response(null, { status: 204 });
     }
     return jsonResponse({ detail: "Not found" }, 404);
   });
+}
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+  localStorage.clear();
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+});
+
+test("logs in, shows prompt library navigation, and logs out", async () => {
+  const fetchMock = mockAuthedApis();
   const user = userEvent.setup();
   const password = crypto.randomUUID();
 
@@ -82,23 +97,20 @@ test("logs in, loads the protected welcome message, and logs out", async () => {
   await user.type(screen.getByLabelText("密码"), password);
   await user.click(screen.getByRole("button", { name: "登录" }));
 
-  expect(await screen.findByText("欢迎使用 Image Prompt Workbench")).toBeInTheDocument();
+  expect(await screen.findByRole("navigation")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "提示词库" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "生成工作台" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "历史" })).toBeInTheDocument();
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
+
   await user.click(screen.getByRole("button", { name: "退出" }));
   expect(screen.getByLabelText("密码")).toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalled();
 });
 
-test("returns to login when the welcome API returns 401", async () => {
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? "GET").toUpperCase();
-    if (url.includes("/api/auth/login") && method === "POST") {
-      return jsonResponse({ token: "token-1" });
-    }
-    if (url.includes("/api/welcome")) {
-      return jsonResponse({ detail: "Unauthorized" }, 401);
-    }
-    return jsonResponse({ detail: "Not found" }, 404);
+test("returns to login when the prompt cards API returns 401", async () => {
+  mockAuthedApis({
+    cards: jsonResponse({ detail: "Unauthorized" }, 401),
   });
   const user = userEvent.setup();
   const password = crypto.randomUUID();
@@ -110,25 +122,27 @@ test("returns to login when the welcome API returns 401", async () => {
   expect(await screen.findByLabelText("密码")).toBeInTheDocument();
 });
 
-test("does not let a stale welcome 401 clear a later session", async () => {
-  const oldWelcome = deferred<Response>();
-  let welcomeCalls = 0;
+test("does not let a stale cards 401 clear a later session", async () => {
+  const oldCards = deferred<Response>();
+  let cardCalls = 0;
+  let loginCount = 0;
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
     if (url.includes("/api/auth/login") && method === "POST") {
-      return welcomeCalls === 0
+      loginCount += 1;
+      return loginCount === 1
         ? jsonResponse({ token: "token-old" })
         : jsonResponse({ token: "token-new" });
     }
-    if (url.includes("/api/welcome")) {
-      welcomeCalls += 1;
-      if (welcomeCalls === 1) {
-        return oldWelcome.promise;
-      }
-      return jsonResponse({ message: "new session" });
+    if (url.includes("/api/categories")) {
+      return emptyCategoriesResponse();
     }
     if (url.includes("/api/prompt-cards")) {
+      cardCalls += 1;
+      if (cardCalls === 1) {
+        return oldCards.promise;
+      }
       return emptyCardsResponse();
     }
     if (url.includes("/api/auth/logout") && method === "POST") {
@@ -148,30 +162,30 @@ test("does not let a stale welcome 401 clear a later session", async () => {
   await user.click(screen.getByRole("button", { name: "退出" }));
   await user.type(screen.getByLabelText("密码"), newPassword);
   await user.click(screen.getByRole("button", { name: "登录" }));
-  expect(await screen.findByText("new session")).toBeInTheDocument();
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 
-  oldWelcome.resolve(jsonResponse({ detail: "Unauthorized" }, 401));
+  oldCards.resolve(jsonResponse({ detail: "Unauthorized" }, 401));
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
   });
 
-  expect(screen.getByText("new session")).toBeInTheDocument();
+  expect(screen.getByText("暂无提示词卡片")).toBeInTheDocument();
 });
 
-test("does not clear the current token for a stale welcome 401", async () => {
-  const oldWelcome = deferred<Response>();
+test("does not clear the current token for a stale cards 401", async () => {
+  const oldCards = deferred<Response>();
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
     if (url.includes("/api/auth/login") && method === "POST") {
       return jsonResponse({ token: "token-new" });
     }
-    if (url.includes("/api/welcome")) {
-      return oldWelcome.promise;
+    if (url.includes("/api/categories")) {
+      return emptyCategoriesResponse();
     }
     if (url.includes("/api/prompt-cards")) {
-      return emptyCardsResponse();
+      return oldCards.promise;
     }
     return jsonResponse({ detail: "Not found" }, 404);
   });
@@ -181,14 +195,14 @@ test("does not clear the current token for a stale welcome 401", async () => {
   render(
     <AuthProvider>
       <CurrentSession password={password} />
-      <WelcomeView token="token-old" />
+      <AppShell token="token-old" />
     </AuthProvider>,
   );
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled());
   await user.click(screen.getByRole("button", { name: "start current session" }));
   expect(await screen.findByTestId("current-token")).toHaveTextContent("token-new");
 
-  oldWelcome.resolve(jsonResponse({ detail: "Unauthorized" }, 401));
+  oldCards.resolve(jsonResponse({ detail: "Unauthorized" }, 401));
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
@@ -200,7 +214,6 @@ test("does not clear the current token for a stale welcome 401", async () => {
 test("does not let a delayed old logout clear a later session", async () => {
   const oldLogout = deferred<Response>();
   let loginCount = 0;
-  let welcomeCount = 0;
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
@@ -210,11 +223,8 @@ test("does not let a delayed old logout clear a later session", async () => {
         ? jsonResponse({ token: "token-old" })
         : jsonResponse({ token: "token-new" });
     }
-    if (url.includes("/api/welcome")) {
-      welcomeCount += 1;
-      return welcomeCount === 1
-        ? jsonResponse({ message: "old session" })
-        : jsonResponse({ message: "new session" });
+    if (url.includes("/api/categories")) {
+      return emptyCategoriesResponse();
     }
     if (url.includes("/api/prompt-cards")) {
       return emptyCardsResponse();
@@ -239,12 +249,12 @@ test("does not let a delayed old logout clear a later session", async () => {
   );
   await user.type(screen.getByLabelText("密码"), oldPassword);
   await user.click(screen.getByRole("button", { name: "登录" }));
-  expect(await screen.findByText("old session")).toBeInTheDocument();
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "退出" }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalled());
   await user.click(screen.getByRole("button", { name: "start newer session" }));
-  expect(await screen.findByText("new session")).toBeInTheDocument();
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 
   oldLogout.resolve(new Response(null, { status: 204 }));
   await act(async () => {
@@ -252,13 +262,12 @@ test("does not let a delayed old logout clear a later session", async () => {
     await Promise.resolve();
   });
 
-  expect(screen.getByText("new session")).toBeInTheDocument();
+  expect(screen.getByText("暂无提示词卡片")).toBeInTheDocument();
 });
 
 test("shows the current session retry error after a stale logout failure", async () => {
   const oldLogout = deferred<Response>();
   let loginCount = 0;
-  let welcomeCount = 0;
   let logoutCount = 0;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
@@ -269,11 +278,8 @@ test("shows the current session retry error after a stale logout failure", async
         ? jsonResponse({ token: "token-old" })
         : jsonResponse({ token: "token-new" });
     }
-    if (url.includes("/api/welcome")) {
-      welcomeCount += 1;
-      return welcomeCount === 1
-        ? jsonResponse({ message: "old session" })
-        : jsonResponse({ message: "new session" });
+    if (url.includes("/api/categories")) {
+      return emptyCategoriesResponse();
     }
     if (url.includes("/api/prompt-cards")) {
       return emptyCardsResponse();
@@ -299,11 +305,11 @@ test("shows the current session retry error after a stale logout failure", async
   );
   await user.type(screen.getByLabelText("密码"), oldPassword);
   await user.click(screen.getByRole("button", { name: "登录" }));
-  expect(await screen.findByText("old session")).toBeInTheDocument();
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "退出" }));
   await user.click(screen.getByRole("button", { name: "start newer session" }));
-  expect(await screen.findByText("new session")).toBeInTheDocument();
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 
   oldLogout.resolve(jsonResponse({ detail: "Server error" }, 503));
   await act(async () => {
@@ -313,8 +319,10 @@ test("shows the current session retry error after a stale logout failure", async
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "退出" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("退出登录失败，请检查网络后重试");
-  expect(screen.getByText("new session")).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "退出登录失败，请检查网络后重试",
+  );
+  expect(screen.getByText("暂无提示词卡片")).toBeInTheDocument();
 });
 
 test("keeps the session and offers retry when logout fails", async () => {
@@ -325,8 +333,8 @@ test("keeps the session and offers retry when logout fails", async () => {
     if (url.includes("/api/auth/login") && method === "POST") {
       return jsonResponse({ token: "token-1" });
     }
-    if (url.includes("/api/welcome")) {
-      return jsonResponse({ message: "active session" });
+    if (url.includes("/api/categories")) {
+      return emptyCategoriesResponse();
     }
     if (url.includes("/api/prompt-cards")) {
       return emptyCardsResponse();
@@ -346,13 +354,32 @@ test("keeps the session and offers retry when logout fails", async () => {
   renderApp();
   await user.type(screen.getByLabelText("密码"), password);
   await user.click(screen.getByRole("button", { name: "登录" }));
-  expect(await screen.findByText("active session")).toBeInTheDocument();
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "退出" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("退出登录失败，请检查网络后重试");
-  expect(screen.getByText("active session")).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "退出登录失败，请检查网络后重试",
+  );
+  expect(screen.getByText("暂无提示词卡片")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "重试退出登录" }));
   expect(await screen.findByLabelText("密码")).toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalled();
+});
+
+test("navigates to workspace placeholder from library nav", async () => {
+  mockAuthedApis();
+  const user = userEvent.setup();
+  const password = crypto.randomUUID();
+
+  renderApp();
+  await user.type(screen.getByLabelText("密码"), password);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  expect(await screen.findByRole("button", { name: "生成工作台" })).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "生成工作台" }));
+  expect(screen.getByText("生成工作台即将推出。本页仅作为「使用此提示词」跳转占位。")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "提示词库" }));
+  expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 });

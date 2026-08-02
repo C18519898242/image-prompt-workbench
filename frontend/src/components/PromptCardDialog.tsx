@@ -15,6 +15,7 @@ type PromptCardDialogProps = {
   onPrev: () => void;
   onNext: () => void;
   onSelectIndex: (index: number) => void;
+  onUsePrompt?: () => void;
 };
 
 export function PromptCardDialog({
@@ -30,6 +31,7 @@ export function PromptCardDialog({
   onPrev,
   onNext,
   onSelectIndex,
+  onUsePrompt,
 }: PromptCardDialogProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -62,7 +64,7 @@ export function PromptCardDialog({
       >
         <div className="prompt-card-dialog-header">
           <h2 id="prompt-card-dialog-title">{card.title}</h2>
-          <button type="button" onClick={onClose} aria-label="关闭">
+          <button type="button" className="btn btn-secondary" onClick={onClose} aria-label="关闭">
             关闭
           </button>
         </div>
@@ -83,7 +85,7 @@ export function PromptCardDialog({
         </div>
 
         <div className="prompt-card-carousel-controls">
-          <button type="button" onClick={onPrev} disabled={currentIndex <= 1}>
+          <button type="button" className="btn btn-secondary" onClick={onPrev} disabled={currentIndex <= 1}>
             上一张
           </button>
           <span>
@@ -91,6 +93,7 @@ export function PromptCardDialog({
           </span>
           <button
             type="button"
+            className="btn btn-secondary"
             onClick={onNext}
             disabled={currentIndex >= card.image_count}
           >
@@ -135,14 +138,11 @@ export function PromptCardDialog({
           <pre>{card.prompt_text}</pre>
         </section>
 
-        <a
-          className="prompt-card-try-link"
-          href={`https://youmind.com/zh-CN/nano-banana-pro-prompts?q=${encodeURIComponent(card.title)}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          立即生成
-        </a>
+        {onUsePrompt && (
+          <button type="button" className="btn btn-primary" onClick={onUsePrompt}>
+            使用此提示词
+          </button>
+        )}
       </div>
 
       {previewOpen && canPreview && (
@@ -155,7 +155,7 @@ export function PromptCardDialog({
         >
           <button
             type="button"
-            className="prompt-card-lightbox-close"
+            className="prompt-card-lightbox-close btn btn-secondary"
             aria-label="关闭预览"
             onClick={() => setPreviewOpen(false)}
           >
