@@ -321,7 +321,7 @@ select:focus-visible {
 }
 
 .app-shell-main {
-  width: min(100% - 2rem, 72rem);
+  width: min(100% - 2rem, 90rem);
   margin: 0 auto;
   padding: 1.25rem 0 2.5rem;
 }
