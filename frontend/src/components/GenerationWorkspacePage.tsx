@@ -7,41 +7,45 @@ export type GenerationWorkspacePageProps = {
   onBack: () => void;
 };
 
+type ReferenceImage = {
+  name: string;
+  url: string;
+};
+
 export function GenerationWorkspacePage({
   card,
   onBack,
 }: GenerationWorkspacePageProps) {
   const [prompt, setPrompt] = useState(card.prompt_text);
   const [exampleImageIndex, setExampleImageIndex] = useState(0);
-  const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null);
+  const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [showAdvancedParameters, setShowAdvancedParameters] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const referenceImageUrlRef = useRef<string | null>(null);
+  const referenceImageUrlsRef = useRef<string[]>([]);
   const exampleImage = card.images[exampleImageIndex];
 
   useEffect(() => {
     return () => {
-      if (referenceImageUrlRef.current) {
-        URL.revokeObjectURL(referenceImageUrlRef.current);
-      }
+      referenceImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
-  const replaceReferenceImage = (file: File) => {
-    if (referenceImageUrlRef.current) {
-      URL.revokeObjectURL(referenceImageUrlRef.current);
-    }
-    const url = URL.createObjectURL(file);
-    referenceImageUrlRef.current = url;
-    setReferenceImageUrl(url);
+  const replaceReferenceImages = (files: FileList) => {
+    referenceImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    const nextImages = Array.from(files).map((file) => ({
+      name: file.name,
+      url: URL.createObjectURL(file),
+    }));
+    referenceImageUrlsRef.current = nextImages.map((image) => image.url);
+    setReferenceImages(nextImages);
   };
 
-  const removeReferenceImage = () => {
-    if (referenceImageUrlRef.current) {
-      URL.revokeObjectURL(referenceImageUrlRef.current);
-      referenceImageUrlRef.current = null;
-    }
-    setReferenceImageUrl(null);
+  const removeReferenceImage = (url: string) => {
+    URL.revokeObjectURL(url);
+    referenceImageUrlsRef.current = referenceImageUrlsRef.current.filter(
+      (currentUrl) => currentUrl !== url,
+    );
+    setReferenceImages((images) => images.filter((image) => image.url !== url));
   };
 
   return (
@@ -56,9 +60,17 @@ export function GenerationWorkspacePage({
         <h2 id="example-images-heading">示例图</h2>
         {exampleImage ? (
           <>
-            <div className="generation-example-image-frame generation-example-image-frame--4x3">
-              <img src={exampleImage.url} alt="提示词示例图" />
+            <div
+              className="generation-example-image-frame generation-example-image-frame--4x3"
+              style={{ aspectRatio: "4 / 3" }}
+            >
+              <img
+                src={exampleImage.url}
+                alt="提示词示例图"
+                style={{ objectFit: "contain" }}
+              />
             </div>
+            <p>仅用于理解效果</p>
             <div>
               <button
                 type="button"
@@ -100,28 +112,43 @@ export function GenerationWorkspacePage({
       </label>
 
       <section aria-labelledby="reference-images-heading">
-        <h2 id="reference-images-heading">生成参考图</h2>
+        <h2 id="reference-images-heading">生成参考图（可选）</h2>
         <label>
           上传生成参考图
           <input
             type="file"
             accept="image/*"
+            multiple
             hidden
             onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) {
-                replaceReferenceImage(file);
+              const files = event.target.files;
+              if (files?.length) {
+                replaceReferenceImages(files);
               }
               event.target.value = "";
             }}
           />
         </label>
-        {referenceImageUrl && (
-          <div>
-            <img src={referenceImageUrl} alt="生成参考图预览" />
-            <button type="button" onClick={removeReferenceImage}>
-              删除生成参考图
-            </button>
+        {referenceImages.length > 0 && (
+          <div
+            className="generation-reference-image-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            }}
+          >
+            {referenceImages.map((image) => (
+              <div key={image.url}>
+                <img src={image.url} alt="生成参考图预览" />
+                <button
+                  type="button"
+                  aria-label={`删除生成参考图：${image.name}`}
+                  onClick={() => removeReferenceImage(image.url)}
+                >
+                  删除生成参考图
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -139,13 +166,13 @@ export function GenerationWorkspacePage({
           <div>
             <label>
               模型
-              <select defaultValue="seedream">
-                <option value="seedream">Seedream</option>
+              <select defaultValue="Nano Banana 2">
+                <option value="Nano Banana 2">Nano Banana 2</option>
               </select>
             </label>
             <label>
               比例
-              <select defaultValue="1:1">
+              <select defaultValue="4:3">
                 <option value="1:1">1:1</option>
                 <option value="4:3">4:3</option>
                 <option value="16:9">16:9</option>
@@ -153,9 +180,9 @@ export function GenerationWorkspacePage({
             </label>
             <label>
               分辨率
-              <select defaultValue="1024">
-                <option value="1024">1024</option>
-                <option value="2048">2048</option>
+              <select defaultValue="1K">
+                <option value="1K">1K</option>
+                <option value="2K">2K</option>
               </select>
             </label>
             <label>
@@ -168,9 +195,10 @@ export function GenerationWorkspacePage({
             </label>
             <label>
               思考级别
-              <select defaultValue="标准">
-                <option value="标准">标准</option>
-                <option value="深入">深入</option>
+              <select defaultValue="中等">
+                <option value="低">低</option>
+                <option value="中等">中等</option>
+                <option value="高">高</option>
               </select>
             </label>
           </div>

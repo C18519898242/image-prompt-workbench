@@ -42,7 +42,8 @@ test("显示生成工作台的必要区域，且没有清空或字符数功能",
   expect(screen.getByText("江南烟雨")).toBeInTheDocument();
   expect(screen.getByLabelText("提示词")).toHaveValue("水墨山水长卷");
   expect(screen.getByText("示例图")).toBeInTheDocument();
-  expect(screen.getByText("生成参考图")).toBeInTheDocument();
+  expect(screen.getByText("生成参考图（可选）")).toBeInTheDocument();
+  expect(screen.getByText("仅用于理解效果")).toBeInTheDocument();
   expect(screen.getByText("生成参数")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "开始生成" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "清空" })).not.toBeInTheDocument();
@@ -58,6 +59,12 @@ test("示例图可从第一张切换到第二张", async () => {
     "src",
     "/media/prompt-images/0001-01.jpg",
   );
+  expect(screen.getByAltText("提示词示例图").parentElement).toHaveStyle({
+    aspectRatio: "4 / 3",
+  });
+  expect(screen.getByAltText("提示词示例图")).toHaveStyle({
+    objectFit: "contain",
+  });
 
   await user.click(screen.getByRole("button", { name: "下一张示例图" }));
 
@@ -68,28 +75,50 @@ test("示例图可从第一张切换到第二张", async () => {
   );
 });
 
-test("选择本地参考图后预览，删除和卸载时释放对象 URL", async () => {
+test("参考图支持多张预览、单张删除、替换和卸载时释放对象 URL", async () => {
   const user = userEvent.setup();
-  const createObjectURL = vi.fn(() => "blob:reference-image");
+  const createObjectURL = vi.fn(
+    (file: File) => `blob:${file.name}`,
+  );
   const revokeObjectURL = vi.fn();
   vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
   const { unmount } = renderWorkspace();
-  const file = new File(["image"], "reference.png", { type: "image/png" });
+  const firstFile = new File(["first"], "first.png", { type: "image/png" });
+  const secondFile = new File(["second"], "second.png", { type: "image/png" });
+  const replacementFile = new File(
+    ["replacement"],
+    "replacement.png",
+    { type: "image/png" },
+  );
+  const input = screen.getByLabelText("上传生成参考图");
 
-  await user.upload(screen.getByLabelText("上传生成参考图"), file);
+  await user.upload(input, [firstFile, secondFile]);
 
-  expect(createObjectURL).toHaveBeenCalledWith(file);
+  expect(input).toHaveAttribute("multiple");
+  expect(createObjectURL).toHaveBeenCalledWith(firstFile);
+  expect(createObjectURL).toHaveBeenCalledWith(secondFile);
+  expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(2);
+  expect(
+    screen.getAllByAltText("生成参考图预览")[0].parentElement?.parentElement,
+  ).toHaveStyle({
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  });
+
+  await user.click(screen.getByRole("button", { name: "删除生成参考图：first.png" }));
+  expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(1);
+  expect(revokeObjectURL).toHaveBeenCalledWith("blob:first.png");
+
+  await user.upload(input, replacementFile);
+  expect(revokeObjectURL).toHaveBeenCalledWith("blob:second.png");
+  expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(1);
   expect(screen.getByAltText("生成参考图预览")).toHaveAttribute(
     "src",
-    "blob:reference-image",
+    "blob:replacement.png",
   );
 
-  await user.click(screen.getByRole("button", { name: "删除生成参考图" }));
-  expect(screen.queryByAltText("生成参考图预览")).not.toBeInTheDocument();
-  expect(revokeObjectURL).toHaveBeenCalledWith("blob:reference-image");
-
   unmount();
-  expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+  expect(revokeObjectURL).toHaveBeenCalledWith("blob:replacement.png");
 });
 
 test("空提示词禁用提交，填写提示词后显示本地提交反馈", async () => {
@@ -118,6 +147,13 @@ test("高级参数可展开和收起，且不显示随机种子", async () => {
   expect(screen.getByLabelText("分辨率")).toBeInTheDocument();
   expect(screen.getByLabelText("生成数量")).toBeInTheDocument();
   expect(screen.getByLabelText("思考级别")).toBeInTheDocument();
+  expect(screen.getByLabelText("模型")).toHaveValue("Nano Banana 2");
+  expect(screen.getByLabelText("比例")).toHaveValue("4:3");
+  expect(screen.getByLabelText("分辨率")).toHaveValue("1K");
+  expect(screen.getByLabelText("生成数量")).toHaveValue("1");
+  expect(screen.getByLabelText("思考级别")).toHaveValue("中等");
+  expect(screen.getByLabelText("模型")).toHaveTextContent("Nano Banana 2");
+  expect(screen.getByLabelText("思考级别")).toHaveTextContent("低中等高");
   expect(screen.queryByLabelText(/随机种子/)).not.toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "收起高级参数" }));
