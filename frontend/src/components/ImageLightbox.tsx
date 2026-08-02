@@ -13,8 +13,8 @@ type ImageLightboxProps = {
 };
 
 /**
- * 全屏大图预览：深色遮罩 + 居中图片 + 左右切换。
- * 不使用 Portal / 不改 document.body，避免白屏与无法关闭。
+ * 全屏画廊预览（无对话框卡片感）：
+ * 全屏深色遮罩 + 居中大图 + 两侧箭头 + 右上关闭。
  */
 export function ImageLightbox({
   title,
@@ -55,62 +55,69 @@ export function ImageLightbox({
       aria-label="大图预览"
       onClick={onClose}
     >
-      <div
-        className="image-lightbox-panel"
+      <header
+        className="image-lightbox-topbar"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="image-lightbox-header">
-          <div className="image-lightbox-meta">
-            <h2 className="image-lightbox-title">{title}</h2>
-            {safeTotal > 1 && (
-              <span className="image-lightbox-counter">
-                {safeIndex} / {safeTotal}
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            className="image-lightbox-close"
-            aria-label="关闭预览"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </header>
-
-        <div className="image-lightbox-stage">
-          <button
-            type="button"
-            className="image-lightbox-nav image-lightbox-nav-prev"
-            aria-label="上一张"
-            disabled={!canPrev}
-            onClick={onPrev}
-          >
-            ‹
-          </button>
-
-          {canShow ? (
-            <img
-              className="image-lightbox-image"
-              src={imageUrl!}
-              alt={title}
-              onError={onImageError}
-            />
-          ) : (
-            <span className="image-lightbox-empty">暂无图片</span>
+        <div className="image-lightbox-meta">
+          <span className="image-lightbox-title">{title}</span>
+          {safeTotal > 1 && (
+            <span className="image-lightbox-counter">
+              {safeIndex} / {safeTotal}
+            </span>
           )}
-
-          <button
-            type="button"
-            className="image-lightbox-nav image-lightbox-nav-next"
-            aria-label="下一张"
-            disabled={!canNext}
-            onClick={onNext}
-          >
-            ›
-          </button>
         </div>
+        <button
+          type="button"
+          className="image-lightbox-close"
+          aria-label="关闭预览"
+          onClick={onClose}
+        >
+          ×
+        </button>
+      </header>
+
+      <button
+        type="button"
+        className="image-lightbox-nav image-lightbox-nav-prev"
+        aria-label="上一张"
+        disabled={!canPrev}
+        onClick={(event) => {
+          event.stopPropagation();
+          onPrev();
+        }}
+      >
+        ‹
+      </button>
+
+      <div
+        className="image-lightbox-stage"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {canShow ? (
+          <img
+            className="image-lightbox-image"
+            src={imageUrl!}
+            alt={title}
+            onError={onImageError}
+          />
+        ) : (
+          <span className="image-lightbox-empty">暂无图片</span>
+        )}
       </div>
+
+      <button
+        type="button"
+        className="image-lightbox-nav image-lightbox-nav-next"
+        aria-label="下一张"
+        disabled={!canNext}
+        onClick={(event) => {
+          event.stopPropagation();
+          onNext();
+        }}
+      >
+        ›
+      </button>
     </div>
   );
 }
