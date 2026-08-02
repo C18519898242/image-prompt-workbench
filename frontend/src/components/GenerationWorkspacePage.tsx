@@ -150,25 +150,6 @@ export function GenerationWorkspacePage({
                         />
                       </svg>
                     </button>
-                    <div
-                      className="generation-example-dots"
-                      aria-label={`${safeIndex + 1} / ${images.length}`}
-                    >
-                      {images.map((image, index) => (
-                        <button
-                          key={image.url ?? index}
-                          type="button"
-                          className={
-                            index === safeIndex
-                              ? "generation-example-dot is-active"
-                              : "generation-example-dot"
-                          }
-                          aria-label={`第 ${index + 1} 张`}
-                          aria-current={index === safeIndex ? "true" : undefined}
-                          onClick={() => setExampleImageIndex(index)}
-                        />
-                      ))}
-                    </div>
                   </>
                 )}
               </div>
