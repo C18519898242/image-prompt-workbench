@@ -993,11 +993,11 @@ select:focus-visible {
   display: none;
 }
 
-.generation-parameters-submit {
-  width: 100% !important;
-  border-color: var(--color-primary) !important;
-  background: var(--color-primary) !important;
-  color: var(--color-primary-text) !important;
+.generation-workspace .generation-parameters-submit {
+  width: 100%;
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .generation-submission-feedback {

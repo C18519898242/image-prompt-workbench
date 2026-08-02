@@ -154,21 +154,23 @@ export function GenerationWorkspacePage({
         <div className="generation-reference-image-grid">
           {referenceImages.map((image) => (
             <div className="generation-reference-image-card" key={image.url}>
-                <img
-                  src={image.url}
-                  alt="生成参考图预览"
-                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                />
-                <button
-                  type="button"
-                  aria-label={`删除生成参考图：${image.name}`}
-                  onClick={() => removeReferenceImage(image.url)}
-                >
-                  删除生成参考图
-                </button>
+              <img
+                src={image.url}
+                alt="生成参考图预览"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
+              <button
+                type="button"
+                aria-label={`删除生成参考图：${image.name}`}
+                onClick={() => removeReferenceImage(image.url)}
+              >
+                删除生成参考图
+              </button>
             </div>
           ))}
-          {Array.from({ length: initialReferenceImageSlots }).map((_, index) => (
+          {Array.from({
+            length: Math.max(1, initialReferenceImageSlots - referenceImages.length),
+          }).map((_, index) => (
             <label
               className="generation-reference-image-add-card"
               htmlFor="generation-reference-image-input"

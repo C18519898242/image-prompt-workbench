@@ -109,7 +109,7 @@ test("参考图初始提供四个添加位，并在分批选择时追加预览�
   expect(createObjectURL).toHaveBeenCalledWith(firstFile);
   expect(createObjectURL).toHaveBeenCalledWith(secondFile);
   expect(screen.getAllByAltText("生成参考图预览")).toHaveLength(2);
-  expect(screen.getAllByText("添加")).toHaveLength(4);
+  expect(screen.getAllByText("添加")).toHaveLength(2);
   expect(screen.getAllByAltText("生成参考图预览")[0]).toHaveStyle({
     objectFit: "contain",
     width: "100%",
