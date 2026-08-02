@@ -601,15 +601,25 @@ select:focus-visible {
 .image-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: 1000;
   display: grid;
   place-items: center;
   padding: 1.25rem;
-  background: rgb(15 23 42 / 72%);
-  backdrop-filter: blur(2px);
+}
+
+.image-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: rgb(15 23 42 / 78%);
+  cursor: zoom-out;
 }
 
 .image-lightbox-panel {
+  position: relative;
+  z-index: 1;
   width: min(100%, 64rem);
   max-height: min(92vh, 48rem);
   display: grid;
@@ -668,8 +678,6 @@ select:focus-visible {
   border-radius: 999px;
   background: rgb(255 255 255 / 10%);
   color: #f9fafb;
-  font-size: 1.35rem;
-  line-height: 1;
   cursor: pointer;
 }
 
@@ -715,16 +723,19 @@ select:focus-visible {
   place-items: center;
   border: none;
   border-radius: 999px;
-  background: rgb(17 24 39 / 72%);
+  background: rgb(17 24 39 / 78%);
   color: #fff;
-  font-size: 1.75rem;
-  line-height: 1;
   cursor: pointer;
   box-shadow: 0 0.25rem 0.75rem rgb(0 0 0 / 35%);
 }
 
-.image-lightbox-nav:hover {
-  background: rgb(17 24 39 / 88%);
+.image-lightbox-nav:hover:not(:disabled) {
+  background: rgb(17 24 39 / 92%);
+}
+
+.image-lightbox-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .image-lightbox-nav-prev {

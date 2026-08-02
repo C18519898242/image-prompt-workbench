@@ -26,7 +26,11 @@ export function PromptCardCard({
     <article className="prompt-card">
       <div
         className="prompt-card-image-frame prompt-card-image-frame--4x3"
-        onClick={onPreview}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onPreview?.();
+        }}
         role={onPreview ? "button" : undefined}
         tabIndex={onPreview ? 0 : undefined}
         onKeyDown={
@@ -34,6 +38,7 @@ export function PromptCardCard({
             ? (event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
+                  event.stopPropagation();
                   onPreview();
                 }
               }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
@@ -119,15 +119,34 @@ export function PromptLibraryPage({
     [cards, selectedCardId],
   );
 
-  const openPreview = (card: PromptCard) => {
+  const openPreview = useCallback((card: PromptCard) => {
     setSelectedCardId(card.id);
     setCurrentIndex(1);
-  };
+  }, []);
 
-  const closeLightbox = () => {
+  const closeLightbox = useCallback(() => {
     setSelectedCardId(null);
     setCurrentIndex(1);
-  };
+  }, []);
+
+  const goPrevImage = useCallback(() => {
+    setCurrentIndex((index) => Math.max(1, index - 1));
+  }, []);
+
+  const goNextImage = useCallback(() => {
+    setCurrentIndex((index) => {
+      const max = selectedCard?.image_count ?? index;
+      return Math.min(max, index + 1);
+    });
+  }, [selectedCard?.image_count]);
+
+  const markCurrentImageFailed = useCallback(() => {
+    if (selectedCardId == null) return;
+    const key = imageKey(selectedCardId, currentIndex);
+    setFailedImages((current) =>
+      current[key] ? current : { ...current, [key]: true },
+    );
+  }, [currentIndex, selectedCardId]);
 
   if (loading) {
     return <p className="prompt-card-status">正在加载提示词…</p>;
@@ -229,24 +248,20 @@ export function PromptLibraryPage({
         <ImageLightbox
           title={selectedCard.title}
           currentIndex={currentIndex}
-          total={selectedCard.image_count}
+          total={selectedCard.image_count || selectedCard.images?.length || 1}
           imageUrl={
-            selectedCard.images.find((image) => image.index === currentIndex)
-              ?.url ?? null
+            selectedCard.images?.find((image) => image.index === currentIndex)
+              ?.url ??
+            selectedCard.images?.[currentIndex - 1]?.url ??
+            null
           }
           imageFailed={Boolean(
             failedImages[imageKey(selectedCard.id, currentIndex)],
           )}
-          onImageError={() =>
-            markFailed(imageKey(selectedCard.id, currentIndex))
-          }
+          onImageError={markCurrentImageFailed}
           onClose={closeLightbox}
-          onPrev={() => setCurrentIndex((index) => Math.max(1, index - 1))}
-          onNext={() =>
-            setCurrentIndex((index) =>
-              Math.min(selectedCard.image_count, index + 1),
-            )
-          }
+          onPrev={goPrevImage}
+          onNext={goNextImage}
         />
       )}
     </section>
