@@ -9,9 +9,15 @@
 
 ## 2. 最终视觉稿
 
-最终采用浅色 AI 创作工作台风格：白色背景、浅灰边框、黑色主按钮、克制的圆角和阴影。页面结构以提示词编辑为中心，右侧承载生成参考图和生成结果。生成参考图使用横向长方形附件卡片，默认展示 4 个位置，有 6 张图片时自然扩展为 2 列 3 行。
+最终采用浅色 AI 创作工作台风格：白色背景、浅灰边框、黑色主按钮、克制的圆角和阴影。产品拆分为“提示词库”首页和“生成工作台”第二页：首页负责浏览和选择提示词，第二页负责编辑提示词、添加生成参考图和设置生成参数。生成参考图使用 4:3 附件卡片，默认展示 4 个位置，有 6 张图片时自然扩展为 2 列 3 行。
 
 ![Image Prompt Workbench 最终浅色设计稿](assets/image-prompt-workbench-final-light.png)
+
+### 首页：提示词库
+
+首页以提示词卡片网格为核心，包含搜索、排序、分类筛选、收藏入口和“使用此提示词”操作。首页不出现提示词编辑器、生成参考图、生成参数、生成结果或生成历史。
+
+![提示词库首页最终示例](assets/image-prompt-workbench-prompt-library.png)
 
 ### 长图显示示例
 
@@ -25,7 +31,11 @@
 
 ![生成工作台最终示例](assets/image-prompt-workbench-generation-workspace.png)
 
-设计稿文件：`docs/superpowers/specs/assets/image-prompt-workbench-final-light.png`
+设计稿文件：
+
+- `docs/superpowers/specs/assets/image-prompt-workbench-prompt-library.png`
+- `docs/superpowers/specs/assets/image-prompt-workbench-generation-workspace.png`
+- `docs/superpowers/specs/assets/image-prompt-workbench-long-image-display.png`
 
 设计稿只作为视觉和布局基准，不代表最终文案、图片内容或后端接口已经实现。
 
