@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.auth import AuthState
 from app.config import Settings, get_settings
 from app.routes.auth import router as auth_router
+from app.routes.generation_history import router as generation_history_router
 from app.routes.prompt_cards import router as prompt_cards_router
 from app.routes.welcome import router as welcome_router
 
@@ -20,6 +21,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(auth_router, prefix="/api")
     application.include_router(welcome_router, prefix="/api")
     application.include_router(prompt_cards_router, prefix="/api")
+    application.include_router(generation_history_router, prefix="/api")
     return application
 
 
