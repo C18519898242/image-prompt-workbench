@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 type ImageLightboxProps = {
   title: string;
@@ -47,7 +48,8 @@ export function ImageLightbox({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canNext, canPrev, onClose, onNext, onPrev]);
 
-  return (
+  /* Portal 到 body，避免生成工作台等页面的 button 样式污染全屏按钮 */
+  return createPortal(
     <div
       className="image-lightbox"
       role="dialog"
@@ -55,7 +57,6 @@ export function ImageLightbox({
       aria-label="大图预览"
       onClick={onClose}
     >
-      {/* 顶栏：左计数 右关闭，贴近 YouMind */}
       <div
         className="image-lightbox-topbar"
         onClick={(event) => event.stopPropagation()}
@@ -130,6 +131,7 @@ export function ImageLightbox({
           />
         </svg>
       </button>
-    </div>
+    </div>,
+    document.body,
   );
 }

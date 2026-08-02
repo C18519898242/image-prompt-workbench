@@ -686,27 +686,51 @@ select:focus-visible {
   font-size: 0.95rem;
 }
 
-/* 两侧圆角方按钮（贴屏幕边缘） */
+/* 全屏控件：自包含样式，不被页面 button 规则影响 */
+.image-lightbox-close,
 .image-lightbox-nav {
-  appearance: none;
+  appearance: none !important;
+  box-sizing: border-box;
+  margin: 0;
+  border: none !important;
+  font: inherit;
+  font-weight: 500;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.image-lightbox-close {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #e5e7eb;
+  font-size: 1.35rem;
+  line-height: 1;
+  padding: 0;
+}
+
+/* 两侧圆角方按钮（贴屏幕边缘）— 首页/工作台统一 */
+.image-lightbox-nav {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
   z-index: 4;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.5rem !important;
+  height: 2.5rem !important;
   display: grid;
   place-items: center;
-  border: none;
+  padding: 0 !important;
   border-radius: 0.55rem;
-  background: #1f1f1f;
-  color: #f3f4f6;
-  cursor: pointer;
+  background: #1f1f1f !important;
+  color: #f3f4f6 !important;
   box-shadow: 0 0.15rem 0.6rem rgb(0 0 0 / 45%);
 }
 
 .image-lightbox-nav:hover:not(:disabled) {
-  background: #2a2a2a;
+  background: #2a2a2a !important;
 }
 
 .image-lightbox-nav:disabled {
