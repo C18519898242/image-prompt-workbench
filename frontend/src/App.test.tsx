@@ -538,6 +538,10 @@ test("新批次取消旧批次：旧请求完成后不再调度后续图片", as
   expect(screen.getAllByText("生成中")).toHaveLength(1);
 
   oldRequest.resolve(generationResponse(41, 9, 1723000000));
-  await waitFor(() => expect(screen.getByText("测试卡片")).toBeInTheDocument());
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "查看 测试卡片" }),
+    ).toBeInTheDocument(),
+  );
   expect(generationCalls).toBe(2);
 });

@@ -1443,6 +1443,47 @@ select:focus-visible {
   color: var(--color-text-muted);
 }
 
+.history-card-state-frame {
+  display: flex;
+  min-height: 154px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.history-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #dbe4ee;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: history-spin 0.8s linear infinite;
+}
+
+.history-failed-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #dc2626;
+  font-weight: 700;
+}
+
+.history-card-meta--static {
+  cursor: default;
+}
+
+@keyframes history-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .history-detail {
   position: sticky;
   top: 1rem;

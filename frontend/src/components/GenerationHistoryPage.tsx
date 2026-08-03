@@ -31,6 +31,19 @@ export const defaultHistoryFilters: HistoryFilters = {
   sort: "newest",
 };
 
+export type HistoryDisplayItem = {
+  key: string;
+  status: "loading" | "failed" | "completed";
+  promptCardId: number;
+  title: string;
+  model: string;
+  aspectRatio: string;
+  resolution: string;
+  createdAtMs: number;
+  sequence: number;
+  history?: GenerationHistoryItem;
+};
+
 type GenerationHistoryPageProps = {
   token: string;
   initialPromptCardId?: number | null;
@@ -64,48 +77,90 @@ function startOfLocalDay(timestampMs: number): number {
   return date.getTime();
 }
 
+export function buildHistoryDisplayItems(
+  persisted: GenerationHistoryItem[],
+  sessionCards: SessionGenerationCard[],
+): HistoryDisplayItem[] {
+  const sessionHistoryIds = new Set(
+    sessionCards.flatMap((card) => (card.history ? [card.history.id] : [])),
+  );
+  const sessionEntries = sessionCards.map(
+    (card): HistoryDisplayItem => ({
+      key: `session-${card.clientId}`,
+      status: card.status,
+      promptCardId: card.promptCardId,
+      title: card.title,
+      model: card.model,
+      aspectRatio: card.aspectRatio,
+      resolution: card.resolution,
+      createdAtMs: card.createdAtMs,
+      sequence: card.sequence,
+      history: card.history,
+    }),
+  );
+  const persistedEntries = persisted
+    .filter((item) => !sessionHistoryIds.has(item.id))
+    .map(
+      (item): HistoryDisplayItem => ({
+        key: `history-${item.id}`,
+        status: "completed",
+        promptCardId: item.prompt_card_id,
+        title: displayHistoryTitle(item),
+        model: item.model,
+        aspectRatio: item.aspect_ratio,
+        resolution: item.resolution,
+        createdAtMs: item.created_at * 1000,
+        sequence: item.id,
+        history: item,
+      }),
+    );
+  return [...sessionEntries, ...persistedEntries];
+}
+
+export function filterHistoryDisplayItems(
+  items: HistoryDisplayItem[],
+  filters: HistoryFilters,
+): HistoryDisplayItem[] {
+  const query = filters.query.trim().toLowerCase();
+  const todayStart = startOfLocalDay(Date.now());
+  const days = filters.timeRange === "week" ? 6 : 29;
+  const minCreatedAtMs =
+    filters.timeRange === "today"
+      ? todayStart
+      : filters.timeRange === "all"
+        ? 0
+        : todayStart - days * 24 * 60 * 60 * 1000;
+  return items
+    .filter((item) => {
+      const haystack =
+        `${item.title} ${item.model} ${item.aspectRatio}`.toLowerCase();
+      return (
+        (!query || haystack.includes(query)) &&
+        (filters.timeRange === "all" || item.createdAtMs >= minCreatedAtMs) &&
+        (!filters.model || item.model === filters.model) &&
+        (!filters.aspectRatio || item.aspectRatio === filters.aspectRatio) &&
+        (filters.promptCardId == null ||
+          item.promptCardId === filters.promptCardId)
+      );
+    })
+    .sort((left, right) => {
+      const direction = filters.sort === "oldest" ? 1 : -1;
+      return (
+        direction *
+        (left.createdAtMs - right.createdAtMs || left.sequence - right.sequence)
+      );
+    });
+}
+
+/** 兼容 wrapper：仅对已持久化历史做过滤排序。 */
 export function filterHistoryItems(
   items: GenerationHistoryItem[],
   filters: HistoryFilters,
 ): GenerationHistoryItem[] {
-  const query = filters.query.trim().toLowerCase();
-  const now = Date.now();
-  const todayStart = startOfLocalDay(now);
-  let minCreatedAt = 0;
-  if (filters.timeRange === "today") {
-    minCreatedAt = Math.floor(todayStart / 1000);
-  } else if (filters.timeRange === "week") {
-    minCreatedAt = Math.floor((todayStart - 6 * 24 * 60 * 60 * 1000) / 1000);
-  } else if (filters.timeRange === "month") {
-    minCreatedAt = Math.floor((todayStart - 29 * 24 * 60 * 60 * 1000) / 1000);
-  }
-
-  let result = items.filter((item) => {
-    if (query) {
-      const title = displayHistoryTitle(item).toLowerCase();
-      const haystack = `${title} ${item.model} ${item.aspect_ratio}`.toLowerCase();
-      if (!haystack.includes(query) && !item.title.toLowerCase().includes(query)) {
-        return false;
-      }
-    }
-    if (filters.timeRange !== "all" && item.created_at < minCreatedAt) {
-      return false;
-    }
-    if (filters.model && item.model !== filters.model) {
-      return false;
-    }
-    if (filters.aspectRatio && item.aspect_ratio !== filters.aspectRatio) {
-      return false;
-    }
-    return true;
-  });
-
-  result = [...result].sort((a, b) =>
-    filters.sort === "oldest"
-      ? a.created_at - b.created_at || a.id - b.id
-      : b.created_at - a.created_at || b.id - a.id,
-  );
-  return result;
+  return filterHistoryDisplayItems(
+    buildHistoryDisplayItems(items, []),
+    filters,
+  ).flatMap((item) => (item.history ? [item.history] : []));
 }
 
 function downloadHistoryImage(item: GenerationHistoryItem): void {
@@ -197,43 +252,56 @@ export function GenerationHistoryPage({
     };
   }, [clearToken, filters.promptCardId, token]);
 
-  const visibleItems = useMemo(
-    () => filterHistoryItems(items, filters),
-    [filters, items],
+  const displayItems = useMemo(
+    () => buildHistoryDisplayItems(items, sessionCards),
+    [items, sessionCards],
+  );
+
+  const visibleDisplayItems = useMemo(
+    () => filterHistoryDisplayItems(displayItems, filters),
+    [displayItems, filters],
+  );
+
+  const visibleCompletedItems = useMemo(
+    () =>
+      visibleDisplayItems.flatMap((entry) =>
+        entry.status === "completed" && entry.history ? [entry.history] : [],
+      ),
+    [visibleDisplayItems],
   );
 
   const modelOptions = useMemo(() => {
-    return Array.from(new Set(items.map((item) => item.model))).sort((a, b) =>
-      a.localeCompare(b, "zh"),
-    );
-  }, [items]);
-
-  const ratioOptions = useMemo(() => {
-    return Array.from(new Set(items.map((item) => item.aspect_ratio))).sort(
+    return Array.from(new Set(displayItems.map((item) => item.model))).sort(
       (a, b) => a.localeCompare(b, "zh"),
     );
-  }, [items]);
+  }, [displayItems]);
+
+  const ratioOptions = useMemo(() => {
+    return Array.from(
+      new Set(displayItems.map((item) => item.aspectRatio)),
+    ).sort((a, b) => a.localeCompare(b, "zh"));
+  }, [displayItems]);
 
   const selectedIndex = useMemo(() => {
     if (selectedId == null) {
       return -1;
     }
-    return visibleItems.findIndex((item) => item.id === selectedId);
-  }, [selectedId, visibleItems]);
+    return visibleCompletedItems.findIndex((item) => item.id === selectedId);
+  }, [selectedId, visibleCompletedItems]);
 
   const selectedItem =
-    selectedIndex >= 0 ? visibleItems[selectedIndex] : null;
+    selectedIndex >= 0 ? visibleCompletedItems[selectedIndex] : null;
 
   useEffect(() => {
     if (selectedId == null) {
       setLightboxOpen(false);
       return;
     }
-    if (!visibleItems.some((item) => item.id === selectedId)) {
+    if (!visibleCompletedItems.some((item) => item.id === selectedId)) {
       setSelectedId(null);
       setLightboxOpen(false);
     }
-  }, [selectedId, visibleItems]);
+  }, [selectedId, visibleCompletedItems]);
 
   const markImageFailed = (id: number) => {
     setFailedImages((current) =>
@@ -250,7 +318,9 @@ export function GenerationHistoryPage({
     if (!selectedItem || deleting) {
       return;
     }
-    const confirmed = window.confirm("确定删除这条生成历史？图片文件将一并删除。");
+    const confirmed = window.confirm(
+      "确定删除这条生成历史？图片文件将一并删除。",
+    );
     if (!confirmed) {
       return;
     }
@@ -258,7 +328,9 @@ export function GenerationHistoryPage({
     setActionError(null);
     try {
       await deleteGenerationHistory(token, selectedItem.id);
-      setItems((current) => current.filter((item) => item.id !== selectedItem.id));
+      setItems((current) =>
+        current.filter((item) => item.id !== selectedItem.id),
+      );
       setSelectedId(null);
       setLightboxOpen(false);
     } catch (requestError: unknown) {
@@ -284,18 +356,17 @@ export function GenerationHistoryPage({
     );
   }
 
-  const filteredSessionCards =
-    filters.promptCardId == null
-      ? sessionCards
-      : sessionCards.filter(
-          (card) => card.promptCardId === filters.promptCardId,
-        );
-
   return (
     <section className="history-page">
       <header className="history-page-header">
         <h1 className="history-page-title">生成历史</h1>
       </header>
+
+      {error && sessionCards.length > 0 && (
+        <p className="prompt-card-status" role="alert">
+          {error}
+        </p>
+      )}
 
       <div className="history-toolbar">
         <input
@@ -394,87 +465,72 @@ export function GenerationHistoryPage({
 
       <div className="history-layout">
         <div className="history-gallery">
-          {filteredSessionCards.length === 0 && items.length === 0 ? (
+          {displayItems.length === 0 ? (
             <p className="prompt-card-status">暂无生成历史</p>
-          ) : filteredSessionCards.length === 0 && visibleItems.length === 0 ? (
+          ) : visibleDisplayItems.length === 0 ? (
             <p className="prompt-card-status">没有符合条件的历史记录</p>
           ) : (
             <div className="history-grid">
-              {filteredSessionCards.map((card) => {
-                if (card.status === "loading") {
+              {visibleDisplayItems.map((entry) => {
+                if (entry.status === "loading" || entry.status === "failed") {
                   return (
                     <article
-                      key={card.clientId}
-                      className="history-card history-card--session"
+                      key={entry.key}
+                      className={`history-card history-card--${entry.status}`}
                     >
-                      <div className="history-card-image-frame">
-                        <div className="history-card-image-placeholder">
-                          生成中
-                        </div>
+                      <div className="history-card-image-frame history-card-state-frame">
+                        {entry.status === "loading" ? (
+                          <>
+                            <span
+                              className="history-loading-spinner"
+                              aria-hidden="true"
+                            />
+                            <span>生成中</span>
+                          </>
+                        ) : (
+                          <>
+                            <span
+                              className="history-failed-icon"
+                              aria-hidden="true"
+                            >
+                              !
+                            </span>
+                            <span>生成失败</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="history-card-meta history-card-meta--static">
+                        <span className="history-card-title">{entry.title}</span>
+                        <span className="history-card-date">
+                          {entry.status === "failed"
+                            ? "请查看后台日志"
+                            : formatHistoryDateTime(entry.createdAtMs / 1000)}
+                        </span>
                       </div>
                     </article>
                   );
                 }
-                if (card.status === "failed") {
-                  return (
-                    <article
-                      key={card.clientId}
-                      className="history-card history-card--session"
-                    >
-                      <div className="history-card-image-frame">
-                        <div className="history-card-image-placeholder">
-                          生成失败
-                        </div>
-                      </div>
-                    </article>
-                  );
+
+                const history = entry.history;
+                if (!history) {
+                  return null;
                 }
-                const title =
-                  card.history != null
-                    ? displayHistoryTitle(card.history)
-                    : card.title;
+
+                const isSelected = history.id === selectedId;
+                const title = entry.title || displayHistoryTitle(history);
+                const failed = Boolean(failedImages[history.id]);
                 return (
                   <article
-                    key={card.clientId}
-                    className="history-card history-card--session"
-                  >
-                    <div className="history-card-image-frame">
-                      {card.history ? (
-                        <img
-                          className="history-card-image"
-                          src={card.history.url}
-                          alt=""
-                        />
-                      ) : (
-                        <div className="history-card-image-placeholder">
-                          {title}
-                        </div>
-                      )}
-                    </div>
-                    <div className="history-card-meta">
-                      <span className="history-card-title">{title}</span>
-                    </div>
-                  </article>
-                );
-              })}
-              {visibleItems.map((item) => {
-                const isSelected = item.id === selectedId;
-                const title = displayHistoryTitle(item);
-                const failed = Boolean(failedImages[item.id]);
-                return (
-                  <article
-                    key={item.id}
+                    key={entry.key}
                     className={
-                      isSelected
-                        ? "history-card is-selected"
-                        : "history-card"
+                      isSelected ? "history-card is-selected" : "history-card"
                     }
                     aria-current={isSelected ? "true" : undefined}
                   >
                     <button
                       type="button"
                       className="history-card-image-hit"
-                      onClick={() => selectHistoryItem(item.id)}
+                      onClick={() => selectHistoryItem(history.id)}
                       aria-label={`查看 ${title}`}
                     >
                       <div className="history-card-image-frame">
@@ -485,9 +541,9 @@ export function GenerationHistoryPage({
                         ) : (
                           <img
                             className="history-card-image"
-                            src={item.url}
+                            src={history.url}
                             alt=""
-                            onError={() => markImageFailed(item.id)}
+                            onError={() => markImageFailed(history.id)}
                           />
                         )}
                         {isSelected && (
@@ -503,13 +559,13 @@ export function GenerationHistoryPage({
                     <button
                       type="button"
                       className="history-card-meta"
-                      onClick={() => selectHistoryItem(item.id)}
+                      onClick={() => selectHistoryItem(history.id)}
                       aria-pressed={isSelected}
                       aria-label={`选择 ${title}`}
                     >
                       <span className="history-card-title">{title}</span>
                       <span className="history-card-date">
-                        {formatHistoryDateTime(item.created_at)}
+                        {formatHistoryDateTime(history.created_at)}
                       </span>
                     </button>
                   </article>
@@ -536,7 +592,7 @@ export function GenerationHistoryPage({
                   className="history-detail-nav-btn"
                   disabled={selectedIndex <= 0}
                   onClick={() => {
-                    const prev = visibleItems[selectedIndex - 1];
+                    const prev = visibleCompletedItems[selectedIndex - 1];
                     if (prev) {
                       selectHistoryItem(prev.id);
                     }
@@ -546,14 +602,16 @@ export function GenerationHistoryPage({
                   ‹
                 </button>
                 <span className="history-detail-counter">
-                  {selectedIndex + 1} / {visibleItems.length}
+                  {selectedIndex + 1} / {visibleCompletedItems.length}
                 </span>
                 <button
                   type="button"
                   className="history-detail-nav-btn"
-                  disabled={selectedIndex >= visibleItems.length - 1}
+                  disabled={
+                    selectedIndex >= visibleCompletedItems.length - 1
+                  }
                   onClick={() => {
-                    const next = visibleItems[selectedIndex + 1];
+                    const next = visibleCompletedItems[selectedIndex + 1];
                     if (next) {
                       selectHistoryItem(next.id);
                     }
@@ -652,7 +710,7 @@ export function GenerationHistoryPage({
         <ImageLightbox
           title={displayHistoryTitle(selectedItem)}
           currentIndex={selectedIndex + 1}
-          total={visibleItems.length}
+          total={visibleCompletedItems.length}
           imageUrl={
             failedImages[selectedItem.id] ? null : selectedItem.url
           }
@@ -661,13 +719,13 @@ export function GenerationHistoryPage({
           onClose={() => setLightboxOpen(false)}
           onDownload={() => downloadHistoryImage(selectedItem)}
           onPrev={() => {
-            const prev = visibleItems[selectedIndex - 1];
+            const prev = visibleCompletedItems[selectedIndex - 1];
             if (prev) {
               selectHistoryItem(prev.id);
             }
           }}
           onNext={() => {
-            const next = visibleItems[selectedIndex + 1];
+            const next = visibleCompletedItems[selectedIndex + 1];
             if (next) {
               selectHistoryItem(next.id);
             }

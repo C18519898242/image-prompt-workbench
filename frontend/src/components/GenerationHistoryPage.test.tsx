@@ -4,7 +4,9 @@ import { beforeEach, expect, test, vi } from "vitest";
 
 import { AuthProvider } from "../auth/AuthContext";
 import {
+  buildHistoryDisplayItems,
   displayHistoryTitle,
+  filterHistoryDisplayItems,
   filterHistoryItems,
   formatHistoryDateTime,
   GenerationHistoryPage,
@@ -12,6 +14,7 @@ import {
   defaultHistoryFilters,
 } from "./GenerationHistoryPage";
 import type { GenerationHistoryItem, PromptCard } from "../api";
+import type { SessionGenerationCard } from "../generation";
 
 const itemA: GenerationHistoryItem = {
   id: 1,
@@ -155,6 +158,156 @@ test("filterHistoryItems filters by query, model, ratio and sort", () => {
       sort: "oldest",
     }).map((i) => i.id),
   ).toEqual([3, 1, 2]);
+});
+
+const loadingSessionCard: SessionGenerationCard = {
+  clientId: "client-loading-1",
+  batchId: 1,
+  status: "loading",
+  promptCardId: 10,
+  title: "江南烟雨",
+  model: "Nano Banana 2",
+  aspectRatio: "4:3",
+  resolution: "1K",
+  createdAtMs: 1_722_931_200_000,
+  sequence: 2,
+};
+
+const failedSessionCard: SessionGenerationCard = {
+  clientId: "client-failed-1",
+  batchId: 1,
+  status: "failed",
+  promptCardId: 10,
+  title: "江南烟雨",
+  model: "Other Model",
+  aspectRatio: "16:9",
+  resolution: "2K",
+  createdAtMs: 1_722_931_100_000,
+  sequence: 1,
+};
+
+const completedSessionCard: SessionGenerationCard = {
+  clientId: "client-completed-1",
+  batchId: 1,
+  status: "completed",
+  promptCardId: 10,
+  title: "江南烟雨",
+  model: "Nano Banana 2",
+  aspectRatio: "4:3",
+  resolution: "1K",
+  createdAtMs: 1_722_930_000_000,
+  sequence: 0,
+  history: itemA,
+};
+
+test("buildHistoryDisplayItems dedups completed session with same API history id", () => {
+  const items = buildHistoryDisplayItems([itemA, itemB], [completedSessionCard]);
+  expect(items.map((item) => item.key)).toEqual([
+    "session-client-completed-1",
+    "history-2",
+  ]);
+  expect(items.filter((item) => item.history?.id === 1)).toHaveLength(1);
+});
+
+test("filterHistoryDisplayItems filters loading/failed by card, model, ratio and sorts", () => {
+  const merged = buildHistoryDisplayItems(
+    [itemB],
+    [loadingSessionCard, failedSessionCard, completedSessionCard],
+  );
+  const base: HistoryFilters = { ...defaultHistoryFilters };
+
+  expect(
+    filterHistoryDisplayItems(merged, {
+      ...base,
+      promptCardId: 10,
+    }).map((item) => item.key),
+  ).toEqual([
+    "session-client-loading-1",
+    "session-client-failed-1",
+    "session-client-completed-1",
+  ]);
+
+  expect(
+    filterHistoryDisplayItems(merged, {
+      ...base,
+      model: "Other Model",
+    }).map((item) => item.key),
+  ).toEqual(["session-client-failed-1"]);
+
+  expect(
+    filterHistoryDisplayItems(merged, {
+      ...base,
+      aspectRatio: "4:3",
+    }).map((item) => item.key),
+  ).toEqual([
+    "session-client-loading-1",
+    "session-client-completed-1",
+  ]);
+
+  // 同毫秒时按 sequence 降序（newest）
+  const sameMsLoading: SessionGenerationCard = {
+    ...loadingSessionCard,
+    clientId: "client-loading-same-ms",
+    createdAtMs: 1_722_931_200_000,
+    sequence: 5,
+  };
+  const sameMsFailed: SessionGenerationCard = {
+    ...failedSessionCard,
+    clientId: "client-failed-same-ms",
+    createdAtMs: 1_722_931_200_000,
+    sequence: 3,
+    model: "Nano Banana 2",
+    aspectRatio: "4:3",
+  };
+  const sameMsMerged = buildHistoryDisplayItems([], [sameMsLoading, sameMsFailed]);
+  expect(
+    filterHistoryDisplayItems(sameMsMerged, base).map((item) => item.key),
+  ).toEqual(["session-client-loading-same-ms", "session-client-failed-same-ms"]);
+
+  expect(
+    filterHistoryDisplayItems(sameMsMerged, {
+      ...base,
+      sort: "oldest",
+    }).map((item) => item.key),
+  ).toEqual(["session-client-failed-same-ms", "session-client-loading-same-ms"]);
+});
+
+test("shows session loading and failed cards while history GET is pending", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/api/prompt-cards") && method === "GET") {
+      return new Response(
+        JSON.stringify({ items: [cardJiangnan, cardCyber] }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("/api/generation-history") && method === "GET") {
+      return new Promise(() => {
+        /* pending forever */
+      });
+    }
+    return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
+  });
+
+  render(
+    <AuthProvider>
+      <GenerationHistoryPage
+        token="token-1"
+        initialPromptCardId={10}
+        sessionCards={[loadingSessionCard, failedSessionCard]}
+      />
+    </AuthProvider>,
+  );
+
+  expect(screen.getByText("生成中")).toBeInTheDocument();
+  expect(screen.getByText("生成失败")).toBeInTheDocument();
+  await screen.findByRole("option", { name: "江南烟雨" });
+  expect(screen.getByLabelText("提示词卡片筛选")).toHaveValue("10");
+  expect(screen.queryByRole("button", { name: "下载" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "删除" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "全屏预览" })).not.toBeInTheDocument();
+  expect(screen.queryByText("正在加载生成历史…")).not.toBeInTheDocument();
 });
 
 test("loads history gallery and opens detail panel", async () => {
