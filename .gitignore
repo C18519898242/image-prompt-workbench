@@ -12,3 +12,5 @@ data/*.db-*
 data/prompt-images/*
 data/reference-images/*
 data/generated-images/*
+
+.worktrees/
