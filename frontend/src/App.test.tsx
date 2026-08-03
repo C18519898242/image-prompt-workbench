@@ -59,6 +59,7 @@ function mockAuthedApis(options?: {
   cards?: Response | (() => Promise<Response>);
   categories?: Response;
   histories?: Response | (() => Promise<Response>);
+  generations?: () => Promise<Response>;
 }) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
@@ -81,12 +82,50 @@ function mockAuthedApis(options?: {
       }
       return options?.histories ?? emptyCardsResponse();
     }
+    if (url.includes("/api/generations") && method === "POST") {
+      if (options?.generations) {
+        return options.generations();
+      }
+      return jsonResponse({ detail: "Not found" }, 404);
+    }
     if (url.includes("/api/auth/logout") && method === "POST") {
       return new Response(null, { status: 204 });
     }
     return jsonResponse({ detail: "Not found" }, 404);
   });
 }
+
+function generationResponse(id: number, promptCardId: number, createdAt: number) {
+  return jsonResponse({
+    id,
+    prompt_card_id: promptCardId,
+    title: "测试卡片",
+    image_path: `generated-images/${id}.png`,
+    url: `/media/generated-images/${id}.png`,
+    model: "Nano Banana 2",
+    aspect_ratio: "Auto",
+    resolution: "1K",
+    created_at: createdAt,
+  });
+}
+
+const workspaceCardFixture = {
+  id: 9,
+  title: "测试卡片",
+  prompt_text: "测试提示词",
+  sort_order: 1,
+  category_ids: [] as number[],
+  categories: [] as { id: number; name: string; sort_order: number }[],
+  image_count: 1,
+  example_image_path: "prompt-images/0001-01.jpg",
+  images: [
+    {
+      index: 1,
+      path: "prompt-images/0001-01.jpg",
+      url: "/media/prompt-images/0001-01.jpg",
+    },
+  ],
+};
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -394,26 +433,9 @@ test("keeps the session and offers retry when logout fails", async () => {
 });
 
 test("使用此提示词进入工作台并可返回", async () => {
-  const card = {
-    id: 9,
-    title: "测试卡片",
-    prompt_text: "测试提示词",
-    sort_order: 1,
-    category_ids: [] as number[],
-    categories: [] as { id: number; name: string; sort_order: number }[],
-    image_count: 1,
-    example_image_path: "prompt-images/0001-01.jpg",
-    images: [
-      {
-        index: 1,
-        path: "prompt-images/0001-01.jpg",
-        url: "/media/prompt-images/0001-01.jpg",
-      },
-    ],
-  };
   mockAuthedApis({
     // Response body 只能读一次，返回时需重新构造
-    cards: async () => jsonResponse({ items: [card] }),
+    cards: async () => jsonResponse({ items: [workspaceCardFixture] }),
   });
   const user = userEvent.setup();
   const password = crypto.randomUUID();
@@ -435,4 +457,87 @@ test("使用此提示词进入工作台并可返回", async () => {
     ),
   );
   expect(await screen.findByText("测试卡片")).toBeInTheDocument();
+});
+
+test("串行批次：按数量依次生成并显示会话卡片", async () => {
+  const requests: Array<ReturnType<typeof deferred<Response>>> = [];
+  let generationCalls = 0;
+  mockAuthedApis({
+    cards: async () => jsonResponse({ items: [workspaceCardFixture] }),
+    generations: () => {
+      generationCalls += 1;
+      const request = deferred<Response>();
+      requests.push(request);
+      return request.promise;
+    },
+  });
+  const user = userEvent.setup();
+  const password = crypto.randomUUID();
+
+  renderApp();
+  await user.type(screen.getByLabelText("密码"), password);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  expect(await screen.findByRole("button", { name: "使用此提示词" })).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "使用此提示词" }));
+  await user.selectOptions(screen.getByLabelText("生成数量"), "2");
+  await user.click(screen.getByRole("button", { name: "开始生成" }));
+
+  expect(await screen.findByRole("heading", { name: "生成历史" })).toBeInTheDocument();
+  expect(screen.getByLabelText("提示词卡片筛选")).toHaveValue("9");
+  expect(screen.getAllByText("生成中")).toHaveLength(1);
+  expect(generationCalls).toBe(1);
+
+  requests[0]!.resolve(generationResponse(101, 9, 1723000001));
+  await waitFor(() => expect(generationCalls).toBe(2));
+  expect(screen.getAllByText("生成中")).toHaveLength(1);
+
+  requests[1]!.resolve(generationResponse(102, 9, 1723000002));
+  await waitFor(() => expect(screen.queryByText("生成中")).not.toBeInTheDocument());
+  const historyGrid = document.querySelector(".history-grid");
+  expect(historyGrid).not.toBeNull();
+  expect(within(historyGrid as HTMLElement).getAllByText("测试卡片")).toHaveLength(
+    2,
+  );
+});
+
+test("新批次取消旧批次：旧请求完成后不再调度后续图片", async () => {
+  const requests: Array<ReturnType<typeof deferred<Response>>> = [];
+  let generationCalls = 0;
+  mockAuthedApis({
+    cards: async () => jsonResponse({ items: [workspaceCardFixture] }),
+    generations: () => {
+      generationCalls += 1;
+      const request = deferred<Response>();
+      requests.push(request);
+      return request.promise;
+    },
+  });
+  const user = userEvent.setup();
+  const password = crypto.randomUUID();
+
+  renderApp();
+  await user.type(screen.getByLabelText("密码"), password);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  expect(await screen.findByRole("button", { name: "使用此提示词" })).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "使用此提示词" }));
+  await user.selectOptions(screen.getByLabelText("生成数量"), "2");
+  await user.click(screen.getByRole("button", { name: "开始生成" }));
+
+  expect(await screen.findByText("生成中")).toBeInTheDocument();
+  expect(generationCalls).toBe(1);
+  const oldRequest = requests[0]!;
+
+  await user.click(screen.getByRole("button", { name: "提示词库" }));
+  expect(await screen.findByRole("button", { name: "使用此提示词" })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "使用此提示词" }));
+  await user.click(screen.getByRole("button", { name: "开始生成" }));
+
+  await waitFor(() => expect(generationCalls).toBe(2));
+  expect(screen.getAllByText("生成中")).toHaveLength(1);
+
+  oldRequest.resolve(generationResponse(41, 9, 1723000000));
+  await waitFor(() => expect(screen.getByText("测试卡片")).toBeInTheDocument());
+  expect(generationCalls).toBe(2);
 });

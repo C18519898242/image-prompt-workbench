@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import type { PromptCard } from "../api";
+import { ApiError, generateImage, type PromptCard } from "../api";
+import { useAuth } from "../auth/AuthContext";
+import type { GenerationSubmission, SessionGenerationCard } from "../generation";
 import { GenerationHistoryPage } from "./GenerationHistoryPage";
 import { GenerationWorkspacePage } from "./GenerationWorkspacePage";
 import { LogoutButton } from "./LogoutButton";
@@ -14,7 +16,7 @@ import { ViewErrorBoundary } from "./ViewErrorBoundary";
 export type AppView =
   | { name: "library" }
   | { name: "workspace"; card: PromptCard }
-  | { name: "history" };
+  | { name: "history"; promptCardId: number | null };
 
 type AppShellProps = {
   token: string;
@@ -25,6 +27,82 @@ export function AppShell({ token }: AppShellProps) {
   const [libraryFilters, setLibraryFilters] = useState<LibraryFilters>(
     defaultLibraryFilters,
   );
+  const activeBatchIdRef = useRef(0);
+  const [sessionCards, setSessionCards] = useState<SessionGenerationCard[]>([]);
+  const { clearToken } = useAuth();
+
+  const runBatch = async (
+    batchId: number,
+    submission: GenerationSubmission,
+  ) => {
+    for (let sequence = 0; sequence < submission.quantity; sequence += 1) {
+      if (activeBatchIdRef.current !== batchId) {
+        return;
+      }
+      const loadingCard: SessionGenerationCard = {
+        clientId: crypto.randomUUID(),
+        batchId,
+        status: "loading",
+        promptCardId: submission.card.id,
+        title: submission.card.title,
+        model: submission.model,
+        aspectRatio: submission.aspectRatio,
+        resolution: submission.resolution,
+        createdAtMs: Date.now(),
+        sequence,
+      };
+      setSessionCards((current) => [loadingCard, ...current]);
+      try {
+        const history = await generateImage(token, {
+          prompt_card_id: submission.card.id,
+          prompt: submission.prompt,
+          model: submission.model,
+          aspect_ratio: submission.aspectRatio,
+          resolution: submission.resolution,
+          thinking_level: submission.thinkingLevel,
+          reference_images: submission.referenceImages,
+        });
+        setSessionCards((current) => {
+          const completed: SessionGenerationCard = {
+            ...loadingCard,
+            status: "completed",
+            createdAtMs: Date.now(),
+            history,
+          };
+          return current.some((item) => item.clientId === loadingCard.clientId)
+            ? current.map((item) =>
+                item.clientId === loadingCard.clientId ? completed : item,
+              )
+            : [completed, ...current];
+        });
+      } catch (error: unknown) {
+        if (error instanceof ApiError && error.status === 401) {
+          clearToken(token);
+          return;
+        }
+        setSessionCards((current) =>
+          current.map((item) =>
+            item.clientId === loadingCard.clientId
+              ? { ...item, status: "failed" }
+              : item,
+          ),
+        );
+      }
+      if (activeBatchIdRef.current !== batchId) {
+        return;
+      }
+    }
+  };
+
+  const startGeneration = (submission: GenerationSubmission) => {
+    const batchId = activeBatchIdRef.current + 1;
+    activeBatchIdRef.current = batchId;
+    setSessionCards((current) =>
+      current.filter((item) => item.status !== "loading"),
+    );
+    setView({ name: "history", promptCardId: submission.card.id });
+    void runBatch(batchId, submission);
+  };
 
   return (
     <div className="app-shell">
@@ -61,7 +139,7 @@ export function AppShell({ token }: AppShellProps) {
                   ? "app-shell-nav-btn is-active"
                   : "app-shell-nav-btn"
               }
-              onClick={() => setView({ name: "history" })}
+              onClick={() => setView({ name: "history", promptCardId: null })}
             >
               历史
             </button>
@@ -94,9 +172,16 @@ export function AppShell({ token }: AppShellProps) {
             <GenerationWorkspacePage
               card={view.card}
               onBack={() => setView({ name: "library" })}
+              onGenerate={startGeneration}
             />
           )}
-          {view.name === "history" && <GenerationHistoryPage token={token} />}
+          {view.name === "history" && (
+            <GenerationHistoryPage
+              token={token}
+              initialPromptCardId={view.promptCardId}
+              sessionCards={sessionCards}
+            />
+          )}
         </ViewErrorBoundary>
       </main>
     </div>

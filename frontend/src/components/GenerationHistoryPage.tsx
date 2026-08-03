@@ -9,6 +9,7 @@ import {
   type PromptCard,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
+import type { SessionGenerationCard } from "../generation";
 import { ImageLightbox } from "./ImageLightbox";
 
 export type HistoryFilters = {
@@ -32,6 +33,8 @@ export const defaultHistoryFilters: HistoryFilters = {
 
 type GenerationHistoryPageProps = {
   token: string;
+  initialPromptCardId?: number | null;
+  sessionCards?: SessionGenerationCard[];
 };
 
 /** 从 API 组合标题中取出提示词卡片名（去掉尾部 Unix 时间戳）。 */
@@ -117,13 +120,20 @@ function downloadHistoryImage(item: GenerationHistoryItem): void {
   link.remove();
 }
 
-export function GenerationHistoryPage({ token }: GenerationHistoryPageProps) {
+export function GenerationHistoryPage({
+  token,
+  initialPromptCardId = null,
+  sessionCards = [],
+}: GenerationHistoryPageProps) {
   const { clearToken } = useAuth();
   const [items, setItems] = useState<GenerationHistoryItem[]>([]);
   const [promptCards, setPromptCards] = useState<PromptCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<HistoryFilters>(defaultHistoryFilters);
+  const [filters, setFilters] = useState<HistoryFilters>(() => ({
+    ...defaultHistoryFilters,
+    promptCardId: initialPromptCardId ?? null,
+  }));
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -262,17 +272,24 @@ export function GenerationHistoryPage({ token }: GenerationHistoryPageProps) {
     }
   };
 
-  if (loading) {
+  if (loading && sessionCards.length === 0) {
     return <p className="prompt-card-status">正在加载生成历史…</p>;
   }
 
-  if (error) {
+  if (error && sessionCards.length === 0) {
     return (
       <p className="prompt-card-status" role="alert">
         {error}
       </p>
     );
   }
+
+  const filteredSessionCards =
+    filters.promptCardId == null
+      ? sessionCards
+      : sessionCards.filter(
+          (card) => card.promptCardId === filters.promptCardId,
+        );
 
   return (
     <section className="history-page">
@@ -377,12 +394,69 @@ export function GenerationHistoryPage({ token }: GenerationHistoryPageProps) {
 
       <div className="history-layout">
         <div className="history-gallery">
-          {items.length === 0 ? (
+          {filteredSessionCards.length === 0 && items.length === 0 ? (
             <p className="prompt-card-status">暂无生成历史</p>
-          ) : visibleItems.length === 0 ? (
+          ) : filteredSessionCards.length === 0 && visibleItems.length === 0 ? (
             <p className="prompt-card-status">没有符合条件的历史记录</p>
           ) : (
             <div className="history-grid">
+              {filteredSessionCards.map((card) => {
+                if (card.status === "loading") {
+                  return (
+                    <article
+                      key={card.clientId}
+                      className="history-card history-card--session"
+                    >
+                      <div className="history-card-image-frame">
+                        <div className="history-card-image-placeholder">
+                          生成中
+                        </div>
+                      </div>
+                    </article>
+                  );
+                }
+                if (card.status === "failed") {
+                  return (
+                    <article
+                      key={card.clientId}
+                      className="history-card history-card--session"
+                    >
+                      <div className="history-card-image-frame">
+                        <div className="history-card-image-placeholder">
+                          生成失败
+                        </div>
+                      </div>
+                    </article>
+                  );
+                }
+                const title =
+                  card.history != null
+                    ? displayHistoryTitle(card.history)
+                    : card.title;
+                return (
+                  <article
+                    key={card.clientId}
+                    className="history-card history-card--session"
+                  >
+                    <div className="history-card-image-frame">
+                      {card.history ? (
+                        <img
+                          className="history-card-image"
+                          src={card.history.url}
+                          alt=""
+                        />
+                      ) : (
+                        <div className="history-card-image-placeholder">
+                          {title}
+                        </div>
+                      )}
+                    </div>
+                    <div className="history-card-meta">
+                      <span className="history-card-title">{title}</span>
+                    </div>
+                  </article>
+                );
+              })}
               {visibleItems.map((item) => {
                 const isSelected = item.id === selectedId;
                 const title = displayHistoryTitle(item);
