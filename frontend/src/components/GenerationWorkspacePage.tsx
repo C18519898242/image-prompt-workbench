@@ -1,41 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { PromptCard } from "../api";
+import type { AspectRatio, GenerationSubmission } from "../generation";
 import { ImageLightbox } from "./ImageLightbox";
 
 export type GenerationWorkspacePageProps = {
   card: PromptCard;
   onBack: () => void;
+  onGenerate: (submission: GenerationSubmission) => void;
 };
 
 type ReferenceImage = {
+  file: File;
   name: string;
   url: string;
 };
-
-type AspectRatio =
-  | "Auto"
-  | "1:1"
-  | "9:16"
-  | "16:9"
-  | "3:4"
-  | "4:3"
-  | "3:2"
-  | "2:3"
-  | "5:4"
-  | "4:5"
-  | "21:9"
-  | "4:1"
-  | "1:4"
-  | "8:1"
-  | "1:8";
 
 type GenerationParams = {
   model: "Nano Banana 2";
   aspectRatio: AspectRatio;
   resolution: "1K" | "2K";
   quantity: "1" | "2" | "4";
-  thinkingLevel: "低" | "中等" | "高";
+  thinkingLevel: "minimal" | "high";
 };
 
 const aspectRatioOptions: AspectRatio[] = [
@@ -61,7 +47,7 @@ const initialGenerationParams: GenerationParams = {
   aspectRatio: "Auto",
   resolution: "1K",
   quantity: "1",
-  thinkingLevel: "中等",
+  thinkingLevel: "minimal",
 };
 
 /** 生成参考图上限（不再使用固定 4 格空槽） */
@@ -70,6 +56,7 @@ const maxReferenceImages = 8;
 export function GenerationWorkspacePage({
   card,
   onBack,
+  onGenerate,
 }: GenerationWorkspacePageProps) {
   const images = Array.isArray(card.images) ? card.images : [];
   const [prompt, setPrompt] = useState(card.prompt_text ?? "");
@@ -78,7 +65,6 @@ export function GenerationWorkspacePage({
   const [generationParams, setGenerationParams] = useState<GenerationParams>(
     initialGenerationParams,
   );
-  const [submitted, setSubmitted] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [failedExampleKeys, setFailedExampleKeys] = useState<
     Record<string, true>
@@ -95,7 +81,6 @@ export function GenerationWorkspacePage({
   useEffect(() => {
     setPrompt(card.prompt_text ?? "");
     setExampleImageIndex(0);
-    setSubmitted(false);
     setLightboxOpen(false);
     setFailedExampleKeys({});
   }, [card.id, card.prompt_text]);
@@ -116,6 +101,7 @@ export function GenerationWorkspacePage({
         return current;
       }
       const nextImages = files.slice(0, remaining).map((file) => ({
+        file,
         name: file.name,
         url: URL.createObjectURL(file),
       }));
@@ -133,6 +119,19 @@ export function GenerationWorkspacePage({
       (currentUrl) => currentUrl !== url,
     );
     setReferenceImages((images) => images.filter((image) => image.url !== url));
+  };
+
+  const handleSubmit = () => {
+    onGenerate({
+      card,
+      prompt: prompt.trim(),
+      model: generationParams.model,
+      aspectRatio: generationParams.aspectRatio,
+      resolution: generationParams.resolution,
+      quantity: Number(generationParams.quantity) as 1 | 2 | 4,
+      thinkingLevel: generationParams.thinkingLevel,
+      referenceImages: referenceImages.map((image) => image.file),
+    });
   };
 
   return (
@@ -268,7 +267,6 @@ export function GenerationWorkspacePage({
             value={prompt}
             onChange={(event) => {
               setPrompt(event.target.value);
-              setSubmitted(false);
             }}
           />
         </div>
@@ -414,9 +412,8 @@ export function GenerationWorkspacePage({
                   }))
                 }
               >
-                <option value="低">低</option>
-                <option value="中等">中等</option>
-                <option value="高">高</option>
+                <option value="minimal">低</option>
+                <option value="high">高</option>
               </select>
             </label>
           </div>
@@ -424,15 +421,10 @@ export function GenerationWorkspacePage({
             className="generation-parameters-submit"
             type="button"
             disabled={!prompt.trim()}
-            onClick={() => setSubmitted(true)}
+            onClick={handleSubmit}
           >
             开始生成
           </button>
-          {submitted && (
-            <p className="generation-submission-feedback">
-              已创建本地生成任务（演示）
-            </p>
-          )}
         </section>
       </div>
 

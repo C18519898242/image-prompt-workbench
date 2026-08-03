@@ -31,14 +31,30 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function renderWorkspace() {
-  return render(<GenerationWorkspacePage card={card} onBack={vi.fn()} />);
+function renderWorkspace(onGenerate = vi.fn()) {
+  return {
+    onGenerate,
+    ...render(
+      <GenerationWorkspacePage
+        card={card}
+        onBack={vi.fn()}
+        onGenerate={onGenerate}
+      />,
+    ),
+  };
 }
 
 function optionValues(label: string) {
   return Array.from(
     (screen.getByLabelText(label) as HTMLSelectElement).options,
     (option) => option.value,
+  );
+}
+
+function optionLabels(label: string) {
+  return Array.from(
+    (screen.getByLabelText(label) as HTMLSelectElement).options,
+    (option) => option.textContent,
   );
 }
 
@@ -155,19 +171,38 @@ test("参考图默认仅一个添加按钮，上传后显示预览并可删除�
   expect(revokeObjectURL).toHaveBeenCalledWith("blob:third.png");
 });
 
-test("空提示词禁用提交，填写提示词后显示本地提交反馈", async () => {
+test("空提示词禁用提交；填写参数后按契约调用 onGenerate", async () => {
   const user = userEvent.setup();
-  renderWorkspace();
+  const createObjectURL = vi.fn((file: File) => `blob:${file.name}`);
+  const revokeObjectURL = vi.fn();
+  vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+  const { onGenerate } = renderWorkspace();
   const prompt = screen.getByLabelText("提示词");
   const submit = screen.getByRole("button", { name: "开始生成" });
+  const referenceFile = new File(["ref"], "ref.png", { type: "image/png" });
 
   await user.clear(prompt);
   expect(submit).toBeDisabled();
 
   await user.type(prompt, "新的提示词");
+  await user.selectOptions(screen.getByLabelText("比例"), "9:16");
+  await user.selectOptions(screen.getByLabelText("分辨率"), "2K");
+  await user.selectOptions(screen.getByLabelText("生成数量"), "4");
+  await user.selectOptions(screen.getByLabelText("思考级别"), "high");
+  await user.upload(screen.getByLabelText("上传生成参考图"), referenceFile);
   await user.click(submit);
 
-  expect(screen.getByText("已创建本地生成任务（演示）")).toBeInTheDocument();
+  expect(onGenerate).toHaveBeenCalledWith({
+    card,
+    prompt: "新的提示词",
+    model: "Nano Banana 2",
+    aspectRatio: "9:16",
+    resolution: "2K",
+    quantity: 4,
+    thinkingLevel: "high",
+    referenceImages: [referenceFile],
+  });
+  expect(screen.queryByText("已创建本地生成任务（演示）")).not.toBeInTheDocument();
 });
 
 test("基础参数始终可见且受控", async () => {
@@ -183,7 +218,7 @@ test("基础参数始终可见且受控", async () => {
   expect(screen.getByLabelText("比例")).toHaveValue("Auto");
   expect(screen.getByLabelText("分辨率")).toHaveValue("1K");
   expect(screen.getByLabelText("生成数量")).toHaveValue("1");
-  expect(screen.getByLabelText("思考级别")).toHaveValue("中等");
+  expect(screen.getByLabelText("思考级别")).toHaveValue("minimal");
   expect(optionValues("模型")).toEqual(["Nano Banana 2"]);
   expect(optionValues("比例")).toEqual([
     "Auto",
@@ -204,24 +239,25 @@ test("基础参数始终可见且受控", async () => {
   ]);
   expect(optionValues("分辨率")).toEqual(["1K", "2K"]);
   expect(optionValues("生成数量")).toEqual(["1", "2", "4"]);
-  expect(optionValues("思考级别")).toEqual(["低", "中等", "高"]);
+  expect(optionValues("思考级别")).toEqual(["minimal", "high"]);
+  expect(optionLabels("思考级别")).toEqual(["低", "高"]);
   expect(screen.queryByRole("button", { name: "展开高级参数" })).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/随机种子/)).not.toBeInTheDocument();
 
   await user.selectOptions(screen.getByLabelText("比例"), "9:16");
   await user.selectOptions(screen.getByLabelText("分辨率"), "2K");
   await user.selectOptions(screen.getByLabelText("生成数量"), "4");
-  await user.selectOptions(screen.getByLabelText("思考级别"), "高");
+  await user.selectOptions(screen.getByLabelText("思考级别"), "high");
 
   expect(screen.getByLabelText("比例")).toHaveValue("9:16");
   expect(screen.getByLabelText("分辨率")).toHaveValue("2K");
   expect(screen.getByLabelText("生成数量")).toHaveValue("4");
-  expect(screen.getByLabelText("思考级别")).toHaveValue("高");
+  expect(screen.getByLabelText("思考级别")).toHaveValue("high");
 });
 
-test("提交按钮和本地反馈位于参数面板内，且使用全宽主按钮样式", async () => {
+test("提交按钮位于参数面板内，且使用全宽主按钮样式", async () => {
   const user = userEvent.setup();
-  renderWorkspace();
+  const { onGenerate } = renderWorkspace();
   const parameters = screen.getByRole("region", { name: "生成参数" });
   const submit = within(parameters).getByRole("button", { name: "开始生成" });
 
@@ -229,5 +265,8 @@ test("提交按钮和本地反馈位于参数面板内，且使用全宽主按�
   expect(submit).toHaveClass("generation-parameters-submit");
 
   await user.click(submit);
-  expect(within(parameters).getByText("已创建本地生成任务（演示）")).toBeInTheDocument();
+  expect(onGenerate).toHaveBeenCalled();
+  expect(
+    screen.queryByText("已创建本地生成任务（演示）"),
+  ).not.toBeInTheDocument();
 });

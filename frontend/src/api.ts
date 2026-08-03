@@ -134,3 +134,35 @@ export async function deleteGenerationHistory(
   });
   await parseResponse<void>(response);
 }
+
+export type GenerateImageRequest = {
+  prompt_card_id: number;
+  prompt: string;
+  model: string;
+  aspect_ratio: string;
+  resolution: string;
+  thinking_level: "minimal" | "high";
+  reference_images: File[];
+};
+
+export async function generateImage(
+  token: string,
+  request: GenerateImageRequest,
+): Promise<GenerationHistoryItem> {
+  const body = new FormData();
+  body.set("prompt_card_id", String(request.prompt_card_id));
+  body.set("prompt", request.prompt);
+  body.set("model", request.model);
+  body.set("aspect_ratio", request.aspect_ratio);
+  body.set("resolution", request.resolution);
+  body.set("thinking_level", request.thinking_level);
+  request.reference_images.forEach((file) =>
+    body.append("reference_images", file),
+  );
+  const response = await fetch("/api/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+  return parseResponse<GenerationHistoryItem>(response);
+}
