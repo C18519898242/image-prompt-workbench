@@ -43,9 +43,22 @@ python -m app.cli hash-password
 
 ```env
 AUTH_PASSWORD_HASH='your-generated-argon2id-hash'
+GEMINI_API_KEY=
+GEMINI_BASE_URL=https://gemini.xyz365.tech/v1beta
+GEMINI_MODEL=gemini-3.1-flash-image
 ```
 
-`AUTH_PASSWORD_HASH` 是唯一必需的应用密钥。请使用密码管理器或其他安全随机工具生成强度足够且唯一的密码，不要重复使用短密码。生成的 hash 包含 `$` 字符，使用单引号包裹可以避免 Docker Compose 对其进行插值。CLI 会隐藏密码输入、要求二次确认、不接受命令行明文密码参数，也不会自动写入 `.env`。
+`AUTH_PASSWORD_HASH` 是登录鉴权必需的应用密钥。请使用密码管理器或其他安全随机工具生成强度足够且唯一的密码，不要重复使用短密码。生成的 hash 包含 `$` 字符，使用单引号包裹可以避免 Docker Compose 对其进行插值。CLI 会隐藏密码输入、要求二次确认、不接受命令行明文密码参数，也不会自动写入 `.env`。
+
+### 图片生成配置
+
+执行「开始生成」时还需要配置 `GEMINI_API_KEY`（模型密钥，只在后端读取）。`GEMINI_BASE_URL` 与 `GEMINI_MODEL` 已有默认值，只有代理地址或模型变化时才需要覆盖。
+
+生成行为说明：
+
+- 点击「开始生成」会立即跳转到生成历史页，并按本次提示词卡片初始化筛选；前端一次只显示并请求一张图，按数量串行继续。
+- 历史页中的「生成中」「生成失败」卡片只存在于当前浏览器会话，刷新后会消失；成功写入数据库的图片刷新后仍可见。
+- 失败详情写入后端控制台和 `data/logs/app.log`，前端失败卡片只提示查看后台日志。
 
 在第一个终端启动后端：
 
