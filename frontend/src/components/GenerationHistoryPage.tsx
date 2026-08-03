@@ -48,6 +48,8 @@ type GenerationHistoryPageProps = {
   token: string;
   initialPromptCardId?: number | null;
   sessionCards?: SessionGenerationCard[];
+  /** 面包屑「提示词库」点击回调 */
+  onBack?: () => void;
   /** 删除已持久化历史后，通知父组件清理对应会话 completed 卡片 */
   onSessionHistoryDeleted?: (historyId: number) => void;
 };
@@ -181,6 +183,7 @@ export function GenerationHistoryPage({
   token,
   initialPromptCardId = null,
   sessionCards = [],
+  onBack,
   onSessionHistoryDeleted,
 }: GenerationHistoryPageProps) {
   const { clearToken } = useAuth();
@@ -363,7 +366,22 @@ export function GenerationHistoryPage({
   return (
     <section className="history-page">
       <header className="history-page-header">
-        <h1 className="history-page-title">生成历史</h1>
+        <nav
+          className="generation-workspace-breadcrumb history-page-breadcrumb"
+          aria-label="面包屑"
+        >
+          <button
+            type="button"
+            className="generation-breadcrumb-link"
+            onClick={onBack}
+          >
+            提示词库
+          </button>
+          <span className="generation-breadcrumb-sep" aria-hidden="true">
+            {">"}
+          </span>
+          <span className="generation-breadcrumb-current">生成历史</span>
+        </nav>
       </header>
 
       {error && sessionCards.length > 0 && (

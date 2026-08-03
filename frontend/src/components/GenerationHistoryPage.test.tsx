@@ -103,10 +103,10 @@ function mockHistoryApis(options?: {
   });
 }
 
-function renderHistory() {
+function renderHistory(onBack = vi.fn()) {
   return render(
     <AuthProvider>
-      <GenerationHistoryPage token="token-1" />
+      <GenerationHistoryPage token="token-1" onBack={onBack} />
     </AuthProvider>,
   );
 }
@@ -314,14 +314,26 @@ test("loads history gallery and opens detail panel", async () => {
   mockHistoryApis();
 
   const user = userEvent.setup();
-  renderHistory();
+  const onBack = vi.fn();
+  renderHistory(onBack);
 
-  expect(await screen.findByRole("heading", { name: "生成历史" })).toBeInTheDocument();
+  expect(await screen.findByRole("navigation", { name: "面包屑" })).toBeInTheDocument();
+  expect(
+    within(screen.getByRole("navigation", { name: "面包屑" })).getByText("生成历史"),
+  ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "查看 江南烟雨" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "查看 赛博城市" })).toBeInTheDocument();
   expect(screen.getByLabelText("提示词卡片筛选")).toBeInTheDocument();
   expect(screen.getByRole("option", { name: "江南烟雨" })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: "赛博城市" })).toBeInTheDocument();
+
+  await user.click(
+    within(screen.getByRole("navigation", { name: "面包屑" })).getByRole(
+      "button",
+      { name: "提示词库" },
+    ),
+  );
+  expect(onBack).toHaveBeenCalledTimes(1);
 
   await user.click(screen.getByRole("button", { name: "查看 江南烟雨" }));
 

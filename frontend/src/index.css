@@ -895,7 +895,8 @@ select:focus-visible {
   box-shadow: none;
 }
 
-.generation-workspace .generation-breadcrumb-link {
+.generation-workspace .generation-breadcrumb-link,
+.history-page .generation-breadcrumb-link {
   appearance: none;
   display: inline;
   width: auto;
@@ -911,7 +912,8 @@ select:focus-visible {
   cursor: pointer;
 }
 
-.generation-workspace .generation-breadcrumb-link:hover {
+.generation-workspace .generation-breadcrumb-link:hover,
+.history-page .generation-breadcrumb-link:hover {
   color: #6b625a;
   background: transparent;
   text-decoration: underline;
@@ -1280,16 +1282,12 @@ select:focus-visible {
 
 .history-page-header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: 1rem;
 }
 
-.history-page-title {
-  margin: 0;
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+.history-page-breadcrumb {
+  grid-area: unset;
 }
 
 .history-toolbar {

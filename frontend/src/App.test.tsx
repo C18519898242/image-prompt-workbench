@@ -166,10 +166,18 @@ test("top navigation jumps to generation history page", async () => {
   expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "历史" }));
-  expect(await screen.findByRole("heading", { name: "生成历史" })).toBeInTheDocument();
+  expect(await screen.findByRole("navigation", { name: "面包屑" })).toBeInTheDocument();
+  expect(
+    within(screen.getByRole("navigation", { name: "面包屑" })).getByText("生成历史"),
+  ).toBeInTheDocument();
   expect(screen.getByText("暂无生成历史")).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "提示词库" }));
+  await user.click(
+    within(screen.getByRole("navigation", { name: "面包屑" })).getByRole(
+      "button",
+      { name: "提示词库" },
+    ),
+  );
   expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 });
 
@@ -483,7 +491,10 @@ test("串行批次：按数量依次生成并显示会话卡片", async () => {
   await user.selectOptions(screen.getByLabelText("生成数量"), "2");
   await user.click(screen.getByRole("button", { name: "开始生成" }));
 
-  expect(await screen.findByRole("heading", { name: "生成历史" })).toBeInTheDocument();
+  expect(await screen.findByRole("navigation", { name: "面包屑" })).toBeInTheDocument();
+  expect(
+    within(screen.getByRole("navigation", { name: "面包屑" })).getByText("生成历史"),
+  ).toBeInTheDocument();
   expect(screen.getByLabelText("提示词卡片筛选")).toHaveValue("9");
   expect(screen.getAllByText("生成中")).toHaveLength(1);
   expect(generationCalls).toBe(1);
@@ -529,7 +540,12 @@ test("新批次取消旧批次：旧请求完成后不再调度后续图片", as
   expect(generationCalls).toBe(1);
   const oldRequest = requests[0]!;
 
-  await user.click(screen.getByRole("button", { name: "提示词库" }));
+  await user.click(
+    within(screen.getByRole("navigation", { name: "面包屑" })).getByRole(
+      "button",
+      { name: "提示词库" },
+    ),
+  );
   expect(await screen.findByRole("button", { name: "使用此提示词" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "使用此提示词" }));
   await user.click(screen.getByRole("button", { name: "开始生成" }));

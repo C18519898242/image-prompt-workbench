@@ -180,6 +180,7 @@ export function AppShell({ token }: AppShellProps) {
               token={token}
               initialPromptCardId={view.promptCardId}
               sessionCards={sessionCards}
+              onBack={() => setView({ name: "library" })}
               onSessionHistoryDeleted={(historyId) => {
                 setSessionCards((current) =>
                   current.filter(
