@@ -8,7 +8,7 @@ import tempfile
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from app.gemini_image_generator import GeminiImageError, ReferenceImage
 from app.generation_history_repository import GenerationHistoryRepository
@@ -114,10 +114,15 @@ def create_generation(
 
     references = read_references(reference_images)
     connection = sqlite3.connect(settings.database_path)
-    final_path: Path | None = None
     try:
         if PromptCardRepository(connection).get_prompt_card(prompt_card_id) is None:
             raise HTTPException(status_code=404, detail="Prompt card not found")
+    finally:
+        connection.close()
+
+    final_path: Path | None = None
+    try:
+        # 长耗时 Gemini 调用期间不持有 SQLite 连接
         generated = request.app.state.image_generator(
             api_key=settings.gemini_api_key,
             base_url=settings.gemini_base_url,
@@ -133,18 +138,22 @@ def create_generation(
             generated.data,
             generated.mime_type,
         )
-        repository = GenerationHistoryRepository(connection)
-        history_id = repository.create_history(
-            prompt_card_id=prompt_card_id,
-            image_path=image_path,
-            model=model,
-            aspect_ratio=aspect_ratio,
-            resolution=resolution,
-        )
-        history = repository.get_history(history_id)
-        if history is None:
-            raise RuntimeError("生成历史写入后无法读取")
-        return to_generation_history_item(history)
+        connection = sqlite3.connect(settings.database_path)
+        try:
+            repository = GenerationHistoryRepository(connection)
+            history_id = repository.create_history(
+                prompt_card_id=prompt_card_id,
+                image_path=image_path,
+                model=model,
+                aspect_ratio=aspect_ratio,
+                resolution=resolution,
+            )
+            history = repository.get_history(history_id)
+            if history is None:
+                raise RuntimeError("生成历史写入后无法读取")
+            return to_generation_history_item(history)
+        finally:
+            connection.close()
     except HTTPException:
         raise
     except (GeminiImageError, OSError, sqlite3.Error, RuntimeError) as error:
@@ -164,5 +173,3 @@ def create_generation(
             status_code=502,
             detail="图片生成失败，请查看后台日志",
         ) from error
-    finally:
-        connection.close()

@@ -48,6 +48,8 @@ type GenerationHistoryPageProps = {
   token: string;
   initialPromptCardId?: number | null;
   sessionCards?: SessionGenerationCard[];
+  /** 删除已持久化历史后，通知父组件清理对应会话 completed 卡片 */
+  onSessionHistoryDeleted?: (historyId: number) => void;
 };
 
 /** 从 API 组合标题中取出提示词卡片名（去掉尾部 Unix 时间戳）。 */
@@ -179,6 +181,7 @@ export function GenerationHistoryPage({
   token,
   initialPromptCardId = null,
   sessionCards = [],
+  onSessionHistoryDeleted,
 }: GenerationHistoryPageProps) {
   const { clearToken } = useAuth();
   const [items, setItems] = useState<GenerationHistoryItem[]>([]);
@@ -331,6 +334,7 @@ export function GenerationHistoryPage({
       setItems((current) =>
         current.filter((item) => item.id !== selectedItem.id),
       );
+      onSessionHistoryDeleted?.(selectedItem.id);
       setSelectedId(null);
       setLightboxOpen(false);
     } catch (requestError: unknown) {

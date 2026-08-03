@@ -382,6 +382,7 @@ test("filters history by prompt card via generation-history API", async () => {
 
 test("deletes selected history and refreshes gallery", async () => {
   const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+  const onSessionHistoryDeleted = vi.fn();
   let items = [itemA, itemB];
 
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -404,7 +405,14 @@ test("deletes selected history and refreshes gallery", async () => {
   });
 
   const user = userEvent.setup();
-  renderHistory();
+  render(
+    <AuthProvider>
+      <GenerationHistoryPage
+        token="token-1"
+        onSessionHistoryDeleted={onSessionHistoryDeleted}
+      />
+    </AuthProvider>,
+  );
   await user.click(await screen.findByRole("button", { name: "查看 江南烟雨" }));
   await user.click(screen.getByRole("button", { name: "删除" }));
 
@@ -412,6 +420,7 @@ test("deletes selected history and refreshes gallery", async () => {
   await waitFor(() => {
     expect(screen.queryByRole("button", { name: "查看 江南烟雨" })).not.toBeInTheDocument();
   });
+  expect(onSessionHistoryDeleted).toHaveBeenCalledWith(1);
   expect(screen.getByRole("button", { name: "查看 赛博城市" })).toBeInTheDocument();
   expect(screen.getByLabelText("历史详情")).toBeInTheDocument();
   expect(screen.getByText("选择一张图片查看详情")).toBeInTheDocument();

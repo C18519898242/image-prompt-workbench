@@ -180,6 +180,17 @@ export function AppShell({ token }: AppShellProps) {
               token={token}
               initialPromptCardId={view.promptCardId}
               sessionCards={sessionCards}
+              onSessionHistoryDeleted={(historyId) => {
+                setSessionCards((current) =>
+                  current.filter(
+                    (item) =>
+                      !(
+                        item.status === "completed" &&
+                        item.history?.id === historyId
+                      ),
+                  ),
+                );
+              }}
             />
           )}
         </ViewErrorBoundary>

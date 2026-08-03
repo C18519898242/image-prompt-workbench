@@ -21,7 +21,8 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # 后端 API（登录、欢迎、卡片列表等）
+    # 后端 API（登录、欢迎、卡片列表、图片生成等）
+    # 单张生成可能较久（含重试），读超时需大于后端默认 180s
     location /api/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
@@ -29,6 +30,8 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 200s;
+        proxy_send_timeout 200s;
     }
 
     # 静态媒体：/media/prompt-images/0001-01.jpg → data/prompt-images/0001-01.jpg
