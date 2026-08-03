@@ -84,7 +84,7 @@ def _resolve_generated_image_path(
     return resolved_path
 
 
-def _to_item(history: GenerationHistory) -> GenerationHistoryItem:
+def to_generation_history_item(history: GenerationHistory) -> GenerationHistoryItem:
     image_path = Path(history.image_path).as_posix()
     return GenerationHistoryItem(
         id=history.id,
@@ -133,7 +133,7 @@ def create_history(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="History record was not created",
             )
-        return _to_item(history)
+        return to_generation_history_item(history)
     finally:
         connection.close()
 
@@ -149,7 +149,7 @@ def list_history(
         repository = GenerationHistoryRepository(connection)
         return GenerationHistoryListResponse(
             items=[
-                _to_item(history)
+                to_generation_history_item(history)
                 for history in repository.list_histories(prompt_card_id)
             ]
         )
@@ -171,7 +171,7 @@ def get_history(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="History record not found",
             )
-        return _to_item(history)
+        return to_generation_history_item(history)
     finally:
         connection.close()
 
