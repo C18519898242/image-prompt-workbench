@@ -1,0 +1,18 @@
+# 前端、运行时数据、文档等不纳入后端镜像构建上下文
+frontend/
+data/
+.git/
+.gitignore
+docs/
+deploy/
+.superpowers/
+*.md
+.env
+.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.worktrees/

@@ -84,6 +84,8 @@ def write_generated_image(
     except OSError:
         temporary_path.unlink(missing_ok=True)
         raise
+    # tempfile 默认 0o600，nginx 容器以其他用户读取 /media/ 时会 403，需放开读取权限
+    final_path.chmod(0o644)
     return final_path, f"generated-images/{filename}"
 
 

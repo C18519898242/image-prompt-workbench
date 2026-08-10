@@ -1,0 +1,19 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: image-prompt-workbench-backend:latest
+    container_name: ipw-backend
+    user: "1000:1001"
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - ipw_net
+    volumes:
+      # 共享数据目录：nginx 经 ~/nginx/html 只读挂载提供 /media，后端容器读写
+      - /home/ubuntu/nginx/html/ig/data:/app/data
+
+networks:
+  ipw_net:
+    name: ipw_net

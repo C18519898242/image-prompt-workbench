@@ -1,52 +1,38 @@
-# Task 1 Report: Bootstrap the Repository and Configuration
+# 任务 1：把已选提示词传入工作台
 
-## Implementation
+## 实现内容
 
-- Added the importable `backend.app` package and `Settings` configuration model.
-- Configured `AUTH_PASSWORD_HASH` as a required setting, loading from the repository `.env` file with ignored extra environment values.
-- Added cached `get_settings()` access for later tasks.
-- Added backend dependency and pytest configuration files.
-- Added `.env.example`, repository ignore rules, and tracked data-directory markers.
-- Preserved the existing untracked `.idea/` directory; it was not added to Git.
+- 将提示词库的 `onUsePrompt` 回调改为传递完整 `PromptCard`。
+- 将 `AppShell` 的工作台视图状态改为保存完整卡片，并接入 `GenerationWorkspacePage`。
+- 新增最小工作台外壳：返回按钮、工作台标题、卡片标题，以及只读提示词文本框。
+- 删除原有 `WorkspacePlaceholder` 占位组件。
 
-## Tests
+## 测试结果
 
-- Focused RED: `cd backend && python -m pytest tests/test_config.py -q`
-  - Failed during collection with `ModuleNotFoundError: No module named 'app'`, confirming the package/configuration was not present.
-- Focused GREEN: `cd backend && python -m pytest tests/test_config.py -q`
-  - Result: `2 passed`.
-- Full applicable backend suite: `cd backend && python -m pytest -q`
-  - Result: `2 passed`.
-- `git diff --check`
-  - Result: clean.
+执行命令：`cd frontend; npm test -- src/App.test.tsx`
 
-## RED/GREEN Evidence
+- GREEN：通过，1 个测试文件、8 个测试全部通过。
 
-The test was written before `backend/app/__init__.py` and `backend/app/config.py`. The focused test then failed on the expected missing-package import. After the minimum implementation was added, the same focused test passed with both required behaviors covered.
+## TDD RED/GREEN 证据
 
-## Files
+- RED：先将原占位断言替换为工作台标题、`测试卡片` 和 `测试提示词` 文本框断言。运行指定命令后，8 个测试中 1 个失败；失败信息为找不到 `测试卡片`，DOM 显示的仍是 `WorkspacePlaceholder` 与卡片 ID，符合功能尚未实现的预期。
+- GREEN：完成最小卡片传递和工作台外壳后，重新运行相同命令；1 个测试文件通过，8 个测试全部通过。
 
-- `backend/app/__init__.py`
-- `backend/app/config.py`
-- `backend/tests/test_config.py`
-- `backend/requirements.txt`
-- `backend/pyproject.toml`
-- `.env.example`
-- `.gitignore`
-- `data/.gitkeep`
-- `data/prompt-images/.gitkeep`
-- `data/reference-images/.gitkeep`
-- `data/generated-images/.gitkeep`
-- `.superpowers/sdd/task-1-report.md`
+## 变更文件
 
-## Self-review
+- `frontend/src/App.test.tsx`
+- `frontend/src/components/AppShell.tsx`
+- `frontend/src/components/PromptLibraryPage.tsx`
+- `frontend/src/components/WorkspacePlaceholder.tsx`（删除）
+- `frontend/src/components/GenerationWorkspacePage.tsx`（新增）
 
-- Values match the Task 1 brief.
-- No authentication, CLI, HTTP routes, React, Docker, or Nginx implementation was added.
-- The image-directory `.gitkeep` files are explicitly force-added because the required ignore patterns otherwise ignore all contents of those directories.
-- `.idea/` remains untracked and is excluded from the commit.
+## 自审
 
-## Concerns
+- 卡片从提示词库以完整 `PromptCard` 传入工作台，未使用仅包含 ID 的中间状态。
+- 工作台显示指定标题、所选卡片标题和只读提示词内容，并可返回提示词库。
+- 未新增后端接口、上传、任务保存、生成结果、历史记录或其他后续交互。
+- `git diff --check` 无空白错误；未改动或暂存无关的未跟踪文件。
 
-- Dependency installation required escalated network access because the sandbox initially blocked PyPI access.
-- Installing the requested requirements produced pre-existing global-environment conflicts for unrelated packages (`mootdx` and `pyppeteer`); the Task 1 tests still passed.
+## 问题与关注点
+
+- 无。
