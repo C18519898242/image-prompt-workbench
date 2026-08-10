@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.prompt_card_repository import PromptCardRepository
+from app.prompt_card_repository import PromptCardInUseError, PromptCardRepository
 
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schema.sql"
@@ -132,6 +132,54 @@ def test_update_prompt_card_replaces_categories(
     assert card.sort_order == 4
     assert card.category_ids == (new_category_id,)
 
+
+def test_update_prompt_card_content_preserves_sort_and_categories(repository):
+    category_id = repository.create_category("人物")
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/old-01.jpg",
+        image_count=2,
+        sort_order=7,
+        category_ids=[category_id],
+    )
+
+    updated = repository.update_prompt_card_content(
+        card_id,
+        title="新标题",
+        prompt_text="新提示词",
+        example_image_path="prompt-images/new-01.png",
+        image_count=3,
+    )
+
+    card = repository.get_prompt_card(card_id)
+    assert updated is True
+    assert card is not None
+    assert (card.title, card.prompt_text) == ("新标题", "新提示词")
+    assert card.example_image_path == "prompt-images/new-01.png"
+    assert card.image_count == 3
+    assert card.sort_order == 7
+    assert card.category_ids == (category_id,)
+
+
+def test_delete_prompt_card_with_generation_history_raises(repository):
+    card_id = repository.create_prompt_card(
+        title="已使用卡片",
+        prompt_text="提示词",
+        example_image_path="prompt-images/used-01.jpg",
+    )
+    repository._connection.execute(
+        "INSERT INTO generation_history "
+        "(prompt_card_id, image_path, model, aspect_ratio, resolution) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (card_id, "generated/1.png", "model", "1:1", "1K"),
+    )
+    repository._connection.commit()
+
+    with pytest.raises(PromptCardInUseError):
+        repository.delete_prompt_card(card_id)
+
+    assert repository.get_prompt_card(card_id) is not None
 
 def test_update_and_delete_missing_card_return_false(
     repository: PromptCardRepository,

@@ -3,6 +3,10 @@ from dataclasses import dataclass
 import sqlite3
 
 
+class PromptCardInUseError(Exception):
+    """卡片被生成历史引用，不能删除。"""
+
+
 @dataclass(frozen=True)
 class PromptCard:
     id: int
@@ -119,12 +123,40 @@ class PromptCardRepository:
             self._replace_category_links(card_id, normalized_category_ids)
         return True
 
-    def delete_prompt_card(self, card_id: int) -> bool:
+    def update_prompt_card_content(
+        self,
+        card_id: int,
+        *,
+        title: str,
+        prompt_text: str,
+        example_image_path: str,
+        image_count: int,
+    ) -> bool:
+        normalized_image_count = self._normalize_image_count(image_count)
         with self._connection:
             cursor = self._connection.execute(
-                "DELETE FROM prompt_cards WHERE id = ?",
-                (card_id,),
+                "UPDATE prompt_cards SET title = ?, prompt_text = ?, "
+                "example_image_path = ?, image_count = ?, "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (
+                    title,
+                    prompt_text,
+                    example_image_path,
+                    normalized_image_count,
+                    card_id,
+                ),
             )
+        return cursor.rowcount > 0
+
+    def delete_prompt_card(self, card_id: int) -> bool:
+        try:
+            with self._connection:
+                cursor = self._connection.execute(
+                    "DELETE FROM prompt_cards WHERE id = ?",
+                    (card_id,),
+                )
+        except sqlite3.IntegrityError as error:
+            raise PromptCardInUseError(card_id) from error
         return cursor.rowcount > 0
 
     def create_category(self, name: str, sort_order: int = 0) -> int:
