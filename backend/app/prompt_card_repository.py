@@ -46,21 +46,41 @@ class PromptCardRepository:
         normalized_image_count = self._normalize_image_count(image_count)
         normalized_category_ids = self._normalize_category_ids(category_ids)
         with self._connection:
-            cursor = self._connection.execute(
-                "INSERT INTO prompt_cards "
-                "(title, prompt_text, example_image_path, image_count, sort_order) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (
-                    title,
-                    prompt_text,
-                    example_image_path,
-                    normalized_image_count,
-                    sort_order,
-                ),
+            card_id = self._insert_prompt_card(
+                title=title,
+                prompt_text=prompt_text,
+                example_image_path=example_image_path,
+                image_count=normalized_image_count,
+                sort_order=sort_order,
+                category_ids=normalized_category_ids,
             )
-            card_id = int(cursor.lastrowid)
-            self._replace_category_links(card_id, normalized_category_ids)
         return card_id
+
+    def create_prompt_card_with_result(
+        self,
+        *,
+        title: str,
+        prompt_text: str,
+        example_image_path: str,
+        sort_order: int = 0,
+        image_count: int = 1,
+        category_ids: Iterable[int] = (),
+    ) -> PromptCard:
+        normalized_image_count = self._normalize_image_count(image_count)
+        normalized_category_ids = self._normalize_category_ids(category_ids)
+        with self._connection:
+            card_id = self._insert_prompt_card(
+                title=title,
+                prompt_text=prompt_text,
+                example_image_path=example_image_path,
+                image_count=normalized_image_count,
+                sort_order=sort_order,
+                category_ids=normalized_category_ids,
+            )
+            card = self.get_prompt_card(card_id)
+            if card is None:
+                raise RuntimeError("创建提示词卡片后无法读取数据")
+        return card
 
     def get_prompt_card(self, card_id: int) -> PromptCard | None:
         row = self._connection.execute(
@@ -134,19 +154,35 @@ class PromptCardRepository:
     ) -> bool:
         normalized_image_count = self._normalize_image_count(image_count)
         with self._connection:
-            cursor = self._connection.execute(
-                "UPDATE prompt_cards SET title = ?, prompt_text = ?, "
-                "example_image_path = ?, image_count = ?, "
-                "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (
-                    title,
-                    prompt_text,
-                    example_image_path,
-                    normalized_image_count,
-                    card_id,
-                ),
+            updated = self._update_prompt_card_content(
+                card_id,
+                title=title,
+                prompt_text=prompt_text,
+                example_image_path=example_image_path,
+                image_count=normalized_image_count,
             )
-        return cursor.rowcount > 0
+        return updated
+
+    def update_prompt_card_content_with_result(
+        self,
+        card_id: int,
+        *,
+        title: str,
+        prompt_text: str,
+        example_image_path: str,
+        image_count: int,
+    ) -> PromptCard | None:
+        normalized_image_count = self._normalize_image_count(image_count)
+        with self._connection:
+            updated = self._update_prompt_card_content(
+                card_id,
+                title=title,
+                prompt_text=prompt_text,
+                example_image_path=example_image_path,
+                image_count=normalized_image_count,
+            )
+            card = self.get_prompt_card(card_id) if updated else None
+        return card
 
     def delete_prompt_card(self, card_id: int) -> bool:
         try:
@@ -218,6 +254,55 @@ class PromptCardRepository:
             "(prompt_card_id, category_id) VALUES (?, ?)",
             [(card_id, category_id) for category_id in category_ids],
         )
+
+    def _insert_prompt_card(
+        self,
+        *,
+        title: str,
+        prompt_text: str,
+        example_image_path: str,
+        image_count: int,
+        sort_order: int,
+        category_ids: tuple[int, ...],
+    ) -> int:
+        cursor = self._connection.execute(
+            "INSERT INTO prompt_cards "
+            "(title, prompt_text, example_image_path, image_count, sort_order) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                title,
+                prompt_text,
+                example_image_path,
+                image_count,
+                sort_order,
+            ),
+        )
+        card_id = int(cursor.lastrowid)
+        self._replace_category_links(card_id, category_ids)
+        return card_id
+
+    def _update_prompt_card_content(
+        self,
+        card_id: int,
+        *,
+        title: str,
+        prompt_text: str,
+        example_image_path: str,
+        image_count: int,
+    ) -> bool:
+        cursor = self._connection.execute(
+            "UPDATE prompt_cards SET title = ?, prompt_text = ?, "
+            "example_image_path = ?, image_count = ?, "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (
+                title,
+                prompt_text,
+                example_image_path,
+                image_count,
+                card_id,
+            ),
+        )
+        return cursor.rowcount > 0
 
     def _normalize_category_ids(
         self,

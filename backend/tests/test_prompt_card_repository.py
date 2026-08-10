@@ -48,6 +48,27 @@ def test_create_prompt_card_defaults_to_one_image(
     assert card.image_count == 1
 
 
+def test_create_prompt_card_with_result_returns_committed_card(
+    repository: PromptCardRepository,
+) -> None:
+    card = repository.create_prompt_card_with_result(
+        title="原子创建",
+        prompt_text="完整提示词",
+        example_image_path="prompt-images/atomic-01.jpg",
+        image_count=2,
+        sort_order=5,
+        category_ids=(),
+    )
+
+    assert card.title == "原子创建"
+    assert card.prompt_text == "完整提示词"
+    assert card.example_image_path == "prompt-images/atomic-01.jpg"
+    assert card.image_count == 2
+    assert card.sort_order == 5
+    assert card.category_ids == ()
+    assert repository.get_prompt_card(card.id) == card
+
+
 def test_create_and_get_prompt_card_with_categories(
     repository: PromptCardRepository,
 ) -> None:
@@ -160,6 +181,48 @@ def test_update_prompt_card_content_preserves_sort_and_categories(repository):
     assert card.image_count == 3
     assert card.sort_order == 7
     assert card.category_ids == (category_id,)
+
+
+def test_update_prompt_card_content_with_result_preserves_metadata(repository):
+    category_id = repository.create_category("保留分类")
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/old-01.jpg",
+        image_count=2,
+        sort_order=8,
+        category_ids=[category_id],
+    )
+
+    card = repository.update_prompt_card_content_with_result(
+        card_id,
+        title="新标题",
+        prompt_text="新提示词",
+        example_image_path="prompt-images/new-01.png",
+        image_count=3,
+    )
+
+    assert card is not None
+    assert card.id == card_id
+    assert card.title == "新标题"
+    assert card.prompt_text == "新提示词"
+    assert card.example_image_path == "prompt-images/new-01.png"
+    assert card.image_count == 3
+    assert card.sort_order == 8
+    assert card.category_ids == (category_id,)
+    assert repository.get_prompt_card(card_id) == card
+
+
+def test_update_prompt_card_content_with_result_returns_none_for_missing_card(
+    repository: PromptCardRepository,
+) -> None:
+    assert repository.update_prompt_card_content_with_result(
+        999,
+        title="标题",
+        prompt_text="提示词",
+        example_image_path="prompt-images/missing-01.jpg",
+        image_count=1,
+    ) is None
 
 
 def test_delete_prompt_card_with_generation_history_raises(repository):

@@ -7,7 +7,12 @@ from PIL import Image
 
 from app.prompt_card_images import derive_image_paths
 from app.prompt_card_repository import PromptCardInUseError, PromptCardRepository
-from app.prompt_card_uploads import ExistingSelection, IncomingImage, UploadSelection
+from app.prompt_card_uploads import (
+    ExistingSelection,
+    IncomingImage,
+    PromptCardValidationError,
+    UploadSelection,
+)
 from app.prompt_card_write_service import PromptCardNotFoundError, PromptCardWriteService
 
 
@@ -52,6 +57,40 @@ def test_create_card_writes_numbered_images_and_empty_categories(service_context
     assert repository.get_prompt_card(card.id) == card
 
 
+def test_prompt_card_not_found_error_has_stable_chinese_message():
+    error = PromptCardNotFoundError(999)
+
+    assert str(error) == "提示词卡片不存在：999"
+
+
+@pytest.mark.parametrize(
+    ("title", "prompt_text", "message"),
+    (
+        ("   ", "提示词", "请输入标题"),
+        ("标题", "   ", "请输入提示词"),
+    ),
+)
+def test_create_card_rejects_empty_text_before_writing(
+    service_context,
+    title,
+    prompt_text,
+    message,
+):
+    service, repository, image_directory = service_context
+
+    with pytest.raises(PromptCardValidationError, match=message) as caught:
+        service.create_card(
+            title=title,
+            prompt_text=prompt_text,
+            selections=(UploadSelection(0),),
+            uploads=(IncomingImage("new.jpg", image_bytes("JPEG")),),
+        )
+
+    assert caught.value.code == "empty_text"
+    assert repository.list_prompt_cards() == []
+    assert list(image_directory.iterdir()) == []
+
+
 def test_create_card_database_failure_removes_written_images(
     service_context,
     monkeypatch,
@@ -59,11 +98,11 @@ def test_create_card_database_failure_removes_written_images(
     service, repository, image_directory = service_context
 
     def fail_create(**kwargs):
-        raise RuntimeError("db failed")
+        raise RuntimeError("数据库创建失败")
 
-    monkeypatch.setattr(repository, "create_prompt_card", fail_create)
+    monkeypatch.setattr(repository, "create_prompt_card_with_result", fail_create)
 
-    with pytest.raises(RuntimeError, match="db failed"):
+    with pytest.raises(RuntimeError, match="数据库创建失败"):
         service.create_card(
             title="标题",
             prompt_text="提示词",
@@ -71,6 +110,91 @@ def test_create_card_database_failure_removes_written_images(
             uploads=(IncomingImage("new.jpg", image_bytes("JPEG")),),
         )
     assert list(image_directory.iterdir()) == []
+
+
+def test_create_card_preserves_database_error_when_one_cleanup_fails(
+    service_context,
+    monkeypatch,
+    caplog,
+):
+    service, repository, image_directory = service_context
+
+    def fail_create(**kwargs):
+        raise RuntimeError("数据库创建失败")
+
+    original_unlink = Path.unlink
+    failed_once = False
+
+    def fail_first_image_unlink(path: Path, *args, **kwargs):
+        nonlocal failed_once
+        if path.suffix == ".jpg" and not failed_once:
+            failed_once = True
+            raise OSError("模拟单图回收失败")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(repository, "create_prompt_card_with_result", fail_create)
+    monkeypatch.setattr(Path, "unlink", fail_first_image_unlink)
+
+    with pytest.raises(RuntimeError, match="数据库创建失败"):
+        service.create_card(
+            title="标题",
+            prompt_text="提示词",
+            selections=(UploadSelection(0), UploadSelection(1)),
+            uploads=(
+                IncomingImage("one.jpg", image_bytes("JPEG")),
+                IncomingImage("two.jpg", image_bytes("JPEG")),
+            ),
+        )
+
+    assert repository.list_prompt_cards() == []
+    assert list(image_directory.glob("*.jpg")) == []
+    assert "回收新建卡片图片失败" in caplog.text
+
+
+def test_create_card_does_not_read_again_after_atomic_commit(
+    service_context,
+    monkeypatch,
+):
+    service, repository, _ = service_context
+    original_create = repository.create_prompt_card
+    original_atomic_create = repository.create_prompt_card_with_result
+    original_get = repository.get_prompt_card
+    committed = False
+
+    def track_old_create(**kwargs):
+        nonlocal committed
+        card_id = original_create(**kwargs)
+        committed = True
+        return card_id
+
+    def track_atomic_create(**kwargs):
+        nonlocal committed
+        card = original_atomic_create(**kwargs)
+        committed = True
+        return card
+
+    def fail_post_commit_read(card_id):
+        if committed:
+            raise RuntimeError("提交后重读失败")
+        return original_get(card_id)
+
+    monkeypatch.setattr(repository, "create_prompt_card", track_old_create)
+    monkeypatch.setattr(
+        repository,
+        "create_prompt_card_with_result",
+        track_atomic_create,
+    )
+    monkeypatch.setattr(repository, "get_prompt_card", fail_post_commit_read)
+
+    card = service.create_card(
+        title="原子创建",
+        prompt_text="提示词",
+        selections=(UploadSelection(0),),
+        uploads=(IncomingImage("new.jpg", image_bytes("JPEG")),),
+    )
+
+    assert card.title == "原子创建"
+    assert original_get(card.id) == card
 
 
 def test_update_card_reorders_existing_and_upload_and_preserves_metadata(
@@ -112,7 +236,10 @@ def test_update_card_reorders_existing_and_upload_and_preserves_metadata(
 
 def test_update_card_missing_id_keeps_files(service_context):
     service, _, image_directory = service_context
-    with pytest.raises(PromptCardNotFoundError):
+    with pytest.raises(
+        PromptCardNotFoundError,
+        match="提示词卡片不存在：999",
+    ):
         service.update_card(
             999,
             title="标题",
@@ -121,6 +248,44 @@ def test_update_card_missing_id_keeps_files(service_context):
             uploads=(IncomingImage("new.jpg", image_bytes("JPEG")),),
         )
     assert list(image_directory.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("title", "prompt_text", "message"),
+    (
+        ("   ", "提示词", "请输入标题"),
+        ("标题", "   ", "请输入提示词"),
+    ),
+)
+def test_update_card_rejects_empty_text_without_changes(
+    service_context,
+    title,
+    prompt_text,
+    message,
+):
+    service, repository, image_directory = service_context
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/empty-01.jpg",
+    )
+    original = image_bytes("JPEG")
+    image_path = image_directory / "empty-01.jpg"
+    image_path.write_bytes(original)
+
+    with pytest.raises(PromptCardValidationError, match=message):
+        service.update_card(
+            card_id,
+            title=title,
+            prompt_text=prompt_text,
+            selections=(ExistingSelection(1),),
+            uploads=(),
+        )
+
+    card = repository.get_prompt_card(card_id)
+    assert card is not None
+    assert (card.title, card.prompt_text) == ("旧标题", "旧提示词")
+    assert image_path.read_bytes() == original
 
 
 def test_update_card_database_failure_restores_original_files(
@@ -138,11 +303,15 @@ def test_update_card_database_failure_restores_original_files(
     original_path.write_bytes(original)
 
     def fail_update(*args, **kwargs):
-        raise RuntimeError("db failed")
+        raise RuntimeError("数据库更新失败")
 
-    monkeypatch.setattr(repository, "update_prompt_card_content", fail_update)
+    monkeypatch.setattr(
+        repository,
+        "update_prompt_card_content_with_result",
+        fail_update,
+    )
 
-    with pytest.raises(RuntimeError, match="db failed"):
+    with pytest.raises(RuntimeError, match="数据库更新失败"):
         service.update_card(
             card_id,
             title="新标题",
@@ -151,6 +320,295 @@ def test_update_card_database_failure_restores_original_files(
             uploads=(),
         )
     assert original_path.read_bytes() == original
+
+
+def test_update_card_restores_old_files_when_new_cleanup_fails(
+    service_context,
+    monkeypatch,
+    caplog,
+):
+    service, repository, image_directory = service_context
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/cleanup-01.jpg",
+        image_count=2,
+    )
+    originals = (
+        image_bytes("JPEG"),
+        image_bytes("JPEG", (0, 255, 0, 255)),
+    )
+    for index, content in enumerate(originals, start=1):
+        (image_directory / f"cleanup-{index:02d}.jpg").write_bytes(content)
+
+    def fail_update(*args, **kwargs):
+        raise RuntimeError("数据库更新失败")
+
+    original_unlink = Path.unlink
+    failed_once = False
+
+    def fail_first_image_unlink(path: Path, *args, **kwargs):
+        nonlocal failed_once
+        if path.suffix == ".jpg" and not failed_once:
+            failed_once = True
+            raise OSError("模拟新图删除失败")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(
+        repository,
+        "update_prompt_card_content_with_result",
+        fail_update,
+    )
+    monkeypatch.setattr(Path, "unlink", fail_first_image_unlink)
+
+    with pytest.raises(RuntimeError, match="数据库更新失败"):
+        service.update_card(
+            card_id,
+            title="新标题",
+            prompt_text="新提示词",
+            selections=(UploadSelection(0), UploadSelection(1)),
+            uploads=(
+                IncomingImage("one.jpg", image_bytes("JPEG", (0, 0, 255, 255))),
+                IncomingImage("two.jpg", image_bytes("JPEG", (255, 255, 0, 255))),
+            ),
+        )
+
+    card = repository.get_prompt_card(card_id)
+    assert card is not None
+    assert (card.title, card.prompt_text) == ("旧标题", "旧提示词")
+    for index, content in enumerate(originals, start=1):
+        assert (image_directory / f"cleanup-{index:02d}.jpg").read_bytes() == content
+    assert "回收更新后的卡片图片失败" in caplog.text
+
+
+def test_update_card_restores_partial_backup_when_second_backup_fails(
+    service_context,
+    monkeypatch,
+):
+    service, repository, image_directory = service_context
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/backup-01.jpg",
+        image_count=2,
+    )
+    originals = (image_bytes("JPEG"), image_bytes("JPEG", (0, 255, 0, 255)))
+    old_paths = []
+    for index, content in enumerate(originals, start=1):
+        path = image_directory / f"backup-{index:02d}.jpg"
+        path.write_bytes(content)
+        old_paths.append(path)
+    original_replace = Path.replace
+
+    def fail_second_backup(path: Path, destination: Path):
+        if path == old_paths[1] and destination.parent.name == "backup":
+            raise OSError("备份第二张旧图失败")
+        return original_replace(path, destination)
+
+    monkeypatch.setattr(Path, "replace", fail_second_backup)
+
+    with pytest.raises(OSError, match="备份第二张旧图失败"):
+        service.update_card(
+            card_id,
+            title="新标题",
+            prompt_text="新提示词",
+            selections=(ExistingSelection(1), ExistingSelection(2)),
+            uploads=(),
+        )
+
+    for path, content in zip(old_paths, originals, strict=True):
+        assert path.read_bytes() == content
+
+
+def test_update_card_restores_old_files_when_second_new_replace_fails(
+    service_context,
+    monkeypatch,
+):
+    service, repository, image_directory = service_context
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/replace-01.jpg",
+        image_count=2,
+    )
+    originals = (image_bytes("JPEG"), image_bytes("JPEG", (0, 255, 0, 255)))
+    old_paths = []
+    for index, content in enumerate(originals, start=1):
+        path = image_directory / f"replace-{index:02d}.jpg"
+        path.write_bytes(content)
+        old_paths.append(path)
+    original_replace = Path.replace
+
+    def fail_second_new_replace(path: Path, destination: Path):
+        if path.parent.name == "new" and path.name == "replace-02.jpg":
+            raise OSError("替换第二张新图失败")
+        return original_replace(path, destination)
+
+    monkeypatch.setattr(Path, "replace", fail_second_new_replace)
+
+    with pytest.raises(OSError, match="替换第二张新图失败"):
+        service.update_card(
+            card_id,
+            title="新标题",
+            prompt_text="新提示词",
+            selections=(UploadSelection(0), UploadSelection(1)),
+            uploads=(
+                IncomingImage("one.jpg", image_bytes("JPEG", (0, 0, 255, 255))),
+                IncomingImage("two.jpg", image_bytes("JPEG", (255, 255, 0, 255))),
+            ),
+        )
+
+    for path, content in zip(old_paths, originals, strict=True):
+        assert path.read_bytes() == content
+
+
+def test_update_card_preserves_unrestored_backup_and_original_error(
+    service_context,
+    monkeypatch,
+    caplog,
+):
+    service, repository, image_directory = service_context
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/recovery-01.jpg",
+        image_count=3,
+    )
+    originals = (
+        image_bytes("JPEG"),
+        image_bytes("JPEG", (0, 255, 0, 255)),
+        image_bytes("JPEG", (0, 0, 255, 255)),
+    )
+    for index, content in enumerate(originals, start=1):
+        (image_directory / f"recovery-{index:02d}.jpg").write_bytes(content)
+
+    def fail_update(*args, **kwargs):
+        raise RuntimeError("数据库更新失败")
+
+    original_replace = Path.replace
+
+    def fail_second_restore(path: Path, destination: Path):
+        if path.parent.name == "backup" and path.name == "recovery-02.jpg":
+            raise OSError("恢复第二张旧图失败")
+        return original_replace(path, destination)
+
+    monkeypatch.setattr(
+        repository,
+        "update_prompt_card_content_with_result",
+        fail_update,
+    )
+    monkeypatch.setattr(Path, "replace", fail_second_restore)
+
+    with pytest.raises(RuntimeError, match="数据库更新失败"):
+        service.update_card(
+            card_id,
+            title="新标题",
+            prompt_text="新提示词",
+            selections=(
+                ExistingSelection(1),
+                ExistingSelection(2),
+                ExistingSelection(3),
+            ),
+            uploads=(),
+        )
+
+    assert (image_directory / "recovery-01.jpg").read_bytes() == originals[0]
+    assert (image_directory / "recovery-03.jpg").read_bytes() == originals[2]
+    preserved = list(
+        image_directory.glob(".recovery-*/backup/recovery-02.jpg")
+    )
+    assert len(preserved) == 1
+    assert preserved[0].read_bytes() == originals[1]
+    assert "恢复卡片原示例图失败" in caplog.text
+    assert str(preserved[0]) in caplog.text
+
+
+def test_update_card_does_not_read_again_after_atomic_commit(
+    service_context,
+    monkeypatch,
+):
+    service, repository, image_directory = service_context
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/atomic-01.jpg",
+    )
+    (image_directory / "atomic-01.jpg").write_bytes(image_bytes("JPEG"))
+    original_update = repository.update_prompt_card_content
+    original_atomic_update = repository.update_prompt_card_content_with_result
+    original_get = repository.get_prompt_card
+    committed = False
+
+    def track_old_update(*args, **kwargs):
+        nonlocal committed
+        updated = original_update(*args, **kwargs)
+        committed = True
+        return updated
+
+    def track_atomic_update(*args, **kwargs):
+        nonlocal committed
+        card = original_atomic_update(*args, **kwargs)
+        committed = True
+        return card
+
+    def fail_post_commit_read(target_card_id):
+        if committed:
+            raise RuntimeError("提交后重读失败")
+        return original_get(target_card_id)
+
+    monkeypatch.setattr(repository, "update_prompt_card_content", track_old_update)
+    monkeypatch.setattr(
+        repository,
+        "update_prompt_card_content_with_result",
+        track_atomic_update,
+    )
+    monkeypatch.setattr(repository, "get_prompt_card", fail_post_commit_read)
+
+    card = service.update_card(
+        card_id,
+        title="原子更新",
+        prompt_text="新提示词",
+        selections=(ExistingSelection(1),),
+        uploads=(),
+    )
+
+    assert card.title == "原子更新"
+    assert original_get(card_id) == card
+
+
+def test_update_card_logs_backup_cleanup_listing_failure_after_commit(
+    service_context,
+    monkeypatch,
+    caplog,
+):
+    service, repository, image_directory = service_context
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/listing-01.jpg",
+    )
+    (image_directory / "listing-01.jpg").write_bytes(image_bytes("JPEG"))
+    original_iterdir = Path.iterdir
+
+    def fail_backup_listing(path: Path):
+        if path.name == "backup":
+            raise OSError("读取备份目录失败")
+        return original_iterdir(path)
+
+    monkeypatch.setattr(Path, "iterdir", fail_backup_listing)
+
+    card = service.update_card(
+        card_id,
+        title="新标题",
+        prompt_text="新提示词",
+        selections=(ExistingSelection(1),),
+        uploads=(),
+    )
+
+    assert card.title == "新标题"
+    assert repository.get_prompt_card(card_id) == card
+    assert (image_directory / "listing-01.jpg").is_file()
+    assert "读取待清理的卡片原图备份失败" in caplog.text
 
 
 def test_delete_card_removes_database_row_and_images(service_context):
@@ -168,6 +626,18 @@ def test_delete_card_removes_database_row_and_images(service_context):
     service.delete_card(card_id)
     assert repository.get_prompt_card(card_id) is None
     assert list(image_directory.glob("delete-*.jpg")) == []
+
+
+def test_delete_missing_card_has_stable_chinese_message(service_context):
+    service, _, image_directory = service_context
+
+    with pytest.raises(
+        PromptCardNotFoundError,
+        match="提示词卡片不存在：999",
+    ):
+        service.delete_card(999)
+
+    assert list(image_directory.iterdir()) == []
 
 
 def test_delete_card_in_use_keeps_row_and_images(service_context):
@@ -209,7 +679,7 @@ def test_delete_card_logs_file_cleanup_failure(
 
     def fail_target(path: Path, *args, **kwargs):
         if path == target:
-            raise OSError("unlink failed")
+            raise OSError("删除文件失败")
         return original_unlink(path, *args, **kwargs)
 
     monkeypatch.setattr(Path, "unlink", fail_target)

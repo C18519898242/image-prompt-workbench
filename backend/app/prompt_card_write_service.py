@@ -14,9 +14,13 @@ from app.prompt_card_uploads import (
     prepare_final_images,
 )
 
+LOGGER = logging.getLogger("app.prompt_cards")
+
 
 class PromptCardNotFoundError(LookupError):
-    pass
+    def __init__(self, card_id: int) -> None:
+        self.card_id = card_id
+        super().__init__(f"提示词卡片不存在：{card_id}")
 
 
 class PromptCardWriteService:
@@ -54,6 +58,59 @@ class PromptCardWriteService:
             paths.append(path)
         return paths
 
+    def _discard_visible_paths(
+        self,
+        paths: list[Path],
+        *,
+        failure_message: str,
+        recovery_root: Path | None = None,
+    ) -> Path:
+        recovery_root = recovery_root or (
+            self._image_directory / f".recovery-{uuid4().hex}"
+        )
+        discard_directory = recovery_root / "discard"
+        try:
+            discard_directory.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            LOGGER.exception("创建图片恢复目录失败: %s", recovery_root)
+            self._unlink_independently(paths, failure_message=failure_message)
+            return recovery_root
+
+        isolated: list[Path] = []
+        for path in paths:
+            if not path.exists():
+                continue
+            destination = discard_directory / path.name
+            try:
+                path.replace(destination)
+                isolated.append(destination)
+            except OSError:
+                LOGGER.exception("隔离待回收卡片图片失败: %s", path)
+        self._unlink_independently(isolated, failure_message=failure_message)
+        self._remove_empty_recovery(recovery_root)
+        return recovery_root
+
+    @staticmethod
+    def _unlink_independently(
+        paths: list[Path],
+        *,
+        failure_message: str,
+    ) -> None:
+        for path in paths:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                LOGGER.exception("%s，文件保留在: %s", failure_message, path)
+
+    @staticmethod
+    def _remove_empty_recovery(recovery_root: Path) -> None:
+        discard_directory = recovery_root / "discard"
+        for directory in (discard_directory, recovery_root / "backup", recovery_root):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+
     def create_card(
         self,
         *,
@@ -83,7 +140,7 @@ class PromptCardWriteService:
                     final_path = self._image_directory / staged_path.name
                     staged_path.replace(final_path)
                     final_paths.append(final_path)
-                card_id = self._repository.create_prompt_card(
+                card = self._repository.create_prompt_card_with_result(
                     title=title,
                     prompt_text=prompt_text,
                     example_image_path=self._relative_first_path(
@@ -95,12 +152,11 @@ class PromptCardWriteService:
                     category_ids=(),
                 )
             except Exception:
-                for path in final_paths:
-                    path.unlink(missing_ok=True)
+                self._discard_visible_paths(
+                    final_paths,
+                    failure_message="回收新建卡片图片失败",
+                )
                 raise
-        card = self._repository.get_prompt_card(card_id)
-        if card is None:
-            raise RuntimeError("创建卡片后无法读取数据")
         return card
 
     def _read_existing(self, card: PromptCard) -> dict[int, bytes]:
@@ -121,8 +177,38 @@ class PromptCardWriteService:
             ) from error
 
     def _restore_backup(self, backup_directory: Path) -> None:
-        for backup in backup_directory.iterdir():
-            backup.replace(self._image_directory / backup.name)
+        try:
+            backups = list(backup_directory.iterdir())
+        except OSError:
+            LOGGER.exception("读取卡片原图备份失败: %s", backup_directory)
+            return
+        for backup in backups:
+            try:
+                backup.replace(self._image_directory / backup.name)
+            except OSError:
+                LOGGER.exception(
+                    "恢复卡片原示例图失败，备份保留在: %s",
+                    backup,
+                )
+
+    def _discard_backup(
+        self,
+        recovery_root: Path,
+        backup_directory: Path,
+    ) -> None:
+        try:
+            backups = list(backup_directory.iterdir())
+        except OSError:
+            LOGGER.exception(
+                "读取待清理的卡片原图备份失败，备份保留在: %s",
+                backup_directory,
+            )
+            return
+        self._unlink_independently(
+            backups,
+            failure_message="清理已替换的卡片原图失败",
+        )
+        self._remove_empty_recovery(recovery_root)
 
     def update_card(
         self,
@@ -150,6 +236,9 @@ class PromptCardWriteService:
         )
         prefix = Path(card.example_image_path).stem.rsplit("-", 1)[0]
         new_paths: list[Path] = []
+        recovery_root = self._image_directory / f".recovery-{uuid4().hex}"
+        backup_directory = recovery_root / "backup"
+        backup_directory.mkdir(parents=True)
         with tempfile.TemporaryDirectory(
             dir=self._image_directory,
             prefix=".card-",
@@ -161,8 +250,6 @@ class PromptCardWriteService:
                 prepared.extension,
                 prepared.contents,
             )
-            backup_directory = temporary_path / "backup"
-            backup_directory.mkdir(parents=True)
             try:
                 for old_path in old_paths:
                     old_path.replace(backup_directory / old_path.name)
@@ -170,7 +257,7 @@ class PromptCardWriteService:
                     destination = self._image_directory / staged_path.name
                     staged_path.replace(destination)
                     new_paths.append(destination)
-                updated = self._repository.update_prompt_card_content(
+                updated_card = self._repository.update_prompt_card_content_with_result(
                     card_id,
                     title=title,
                     prompt_text=prompt_text,
@@ -180,16 +267,18 @@ class PromptCardWriteService:
                     ),
                     image_count=len(prepared.contents),
                 )
-                if not updated:
+                if updated_card is None:
                     raise PromptCardNotFoundError(card_id)
             except Exception:
-                for path in new_paths:
-                    path.unlink(missing_ok=True)
+                self._discard_visible_paths(
+                    new_paths,
+                    failure_message="回收更新后的卡片图片失败",
+                    recovery_root=recovery_root,
+                )
                 self._restore_backup(backup_directory)
+                self._remove_empty_recovery(recovery_root)
                 raise
-        updated_card = self._repository.get_prompt_card(card_id)
-        if updated_card is None:
-            raise PromptCardNotFoundError(card_id)
+        self._discard_backup(recovery_root, backup_directory)
         return updated_card
 
     def delete_card(self, card_id: int) -> None:
