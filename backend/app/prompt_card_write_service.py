@@ -86,6 +86,14 @@ class PromptCardWriteService:
                 isolated.append(destination)
             except OSError:
                 LOGGER.exception("隔离待回收卡片图片失败: %s", path)
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    LOGGER.exception(
+                        "%s，正式路径仍有残留，需人工处理: %s",
+                        failure_message,
+                        path,
+                    )
         self._unlink_independently(isolated, failure_message=failure_message)
         self._remove_empty_recovery(recovery_root)
         return recovery_root
@@ -236,9 +244,6 @@ class PromptCardWriteService:
         )
         prefix = Path(card.example_image_path).stem.rsplit("-", 1)[0]
         new_paths: list[Path] = []
-        recovery_root = self._image_directory / f".recovery-{uuid4().hex}"
-        backup_directory = recovery_root / "backup"
-        backup_directory.mkdir(parents=True)
         with tempfile.TemporaryDirectory(
             dir=self._image_directory,
             prefix=".card-",
@@ -250,6 +255,9 @@ class PromptCardWriteService:
                 prepared.extension,
                 prepared.contents,
             )
+            recovery_root = self._image_directory / f".recovery-{uuid4().hex}"
+            backup_directory = recovery_root / "backup"
+            backup_directory.mkdir(parents=True)
             try:
                 for old_path in old_paths:
                     old_path.replace(backup_directory / old_path.name)

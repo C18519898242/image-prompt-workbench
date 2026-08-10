@@ -181,7 +181,11 @@ class PromptCardRepository:
                 example_image_path=example_image_path,
                 image_count=normalized_image_count,
             )
-            card = self.get_prompt_card(card_id) if updated else None
+            if not updated:
+                return None
+            card = self.get_prompt_card(card_id)
+            if card is None:
+                raise RuntimeError("更新提示词卡片后无法读取数据")
         return card
 
     def delete_prompt_card(self, card_id: int) -> bool:

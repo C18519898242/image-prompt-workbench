@@ -225,6 +225,38 @@ def test_update_prompt_card_content_with_result_returns_none_for_missing_card(
     ) is None
 
 
+def test_update_prompt_card_content_with_result_rolls_back_when_read_returns_none(
+    repository: PromptCardRepository,
+    monkeypatch,
+) -> None:
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/old-01.jpg",
+        image_count=1,
+    )
+    original_get = repository.get_prompt_card
+    monkeypatch.setattr(repository, "get_prompt_card", lambda target_id: None)
+
+    with pytest.raises(
+        RuntimeError,
+        match="更新提示词卡片后无法读取数据",
+    ):
+        repository.update_prompt_card_content_with_result(
+            card_id,
+            title="新标题",
+            prompt_text="新提示词",
+            example_image_path="prompt-images/new-01.png",
+            image_count=2,
+        )
+
+    card = original_get(card_id)
+    assert card is not None
+    assert (card.title, card.prompt_text) == ("旧标题", "旧提示词")
+    assert card.example_image_path == "prompt-images/old-01.jpg"
+    assert card.image_count == 1
+
+
 def test_delete_prompt_card_with_generation_history_raises(repository):
     card_id = repository.create_prompt_card(
         title="已使用卡片",
