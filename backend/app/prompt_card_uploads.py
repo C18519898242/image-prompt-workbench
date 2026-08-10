@@ -80,7 +80,12 @@ def _detect_format(content: bytes) -> str:
         with Image.open(BytesIO(content)) as image:
             image.verify()
             format_name = image.format
-    except (UnidentifiedImageError, OSError, ValueError) as error:
+    except (
+        Image.DecompressionBombError,
+        UnidentifiedImageError,
+        OSError,
+        ValueError,
+    ) as error:
         raise PromptCardValidationError(
             "invalid_image", "图片文件已损坏或格式不受支持"
         ) from error
@@ -96,7 +101,12 @@ def _encode_png(content: bytes) -> bytes:
             output = BytesIO()
             image.save(output, format="PNG")
             return output.getvalue()
-    except (UnidentifiedImageError, OSError, ValueError) as error:
+    except (
+        Image.DecompressionBombError,
+        UnidentifiedImageError,
+        OSError,
+        ValueError,
+    ) as error:
         raise PromptCardValidationError("invalid_image", "图片转换失败") from error
 
 

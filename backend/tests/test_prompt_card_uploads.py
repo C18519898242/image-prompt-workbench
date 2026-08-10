@@ -63,7 +63,32 @@ def test_prepare_final_images_converts_mixed_input_to_png():
         (UploadSelection(0), UploadSelection(1)), {}, uploads
     )
     assert result.extension == ".png"
-    assert all(content.startswith(b"\x89PNG") for content in result.contents)
+    for content in result.contents:
+        with Image.open(BytesIO(content)) as image:
+            image.verify()
+            assert image.format == "PNG"
+
+
+def test_prepare_final_images_converts_decompression_bomb_to_validation_error(monkeypatch):
+    def raise_decompression_bomb(*args, **kwargs):
+        raise Image.DecompressionBombError("图片像素数过大")
+
+    monkeypatch.setattr(uploads_module.Image, "open", raise_decompression_bomb)
+    with pytest.raises(PromptCardValidationError) as captured:
+        prepare_final_images(
+            (UploadSelection(0),), {}, [IncomingImage("one.jpg", b"content")]
+        )
+    assert captured.value.code == "invalid_image"
+
+
+def test_encode_png_converts_decompression_bomb_to_validation_error(monkeypatch):
+    def raise_decompression_bomb(*args, **kwargs):
+        raise Image.DecompressionBombError("图片像素数过大")
+
+    monkeypatch.setattr(uploads_module.Image, "open", raise_decompression_bomb)
+    with pytest.raises(PromptCardValidationError) as captured:
+        uploads_module._encode_png(b"content")
+    assert captured.value.code == "invalid_image"
 
 
 def test_prepare_final_images_rejects_fake_jpeg():
