@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -12,7 +22,22 @@ from app.prompt_card_images import (
     derive_image_paths,
     get_image_media_type,
 )
-from app.prompt_card_repository import PromptCard, PromptCardRepository
+from app.prompt_card_repository import (
+    PromptCard,
+    PromptCardInUseError,
+    PromptCardRepository,
+)
+from app.prompt_card_uploads import (
+    MAX_IMAGE_BYTES,
+    MAX_TOTAL_UPLOAD_BYTES,
+    IncomingImage,
+    PromptCardValidationError,
+    parse_image_manifest,
+)
+from app.prompt_card_write_service import (
+    PromptCardNotFoundError,
+    PromptCardWriteService,
+)
 from app.routes.auth import require_token
 
 router = APIRouter(tags=["prompt-cards"])
@@ -48,6 +73,168 @@ class PromptCardItem(BaseModel):
 
 class PromptCardListResponse(BaseModel):
     items: list[PromptCardItem]
+
+
+ERROR_STATUS = {
+    "image_too_large": status.HTTP_413_CONTENT_TOO_LARGE,
+    "total_too_large": status.HTTP_413_CONTENT_TOO_LARGE,
+}
+
+
+def _validation_http_error(error: PromptCardValidationError) -> HTTPException:
+    return HTTPException(
+        status_code=ERROR_STATUS.get(error.code, status.HTTP_400_BAD_REQUEST),
+        detail=str(error),
+    )
+
+
+async def _read_new_images(files: list[UploadFile]) -> tuple[IncomingImage, ...]:
+    result: list[IncomingImage] = []
+    total = 0
+    for upload in files:
+        content = await upload.read(MAX_IMAGE_BYTES + 1)
+        if len(content) > MAX_IMAGE_BYTES:
+            raise PromptCardValidationError(
+                "image_too_large",
+                "单张图片不能超过 20 MB",
+            )
+        total += len(content)
+        if total > MAX_TOTAL_UPLOAD_BYTES:
+            raise PromptCardValidationError(
+                "total_too_large",
+                "单次上传总量不能超过 100 MB",
+            )
+        result.append(IncomingImage(upload.filename or "image", content))
+    return tuple(result)
+
+
+def _category_map(repository: PromptCardRepository) -> dict[int, CategoryItem]:
+    return {
+        item.id: CategoryItem(
+            id=item.id,
+            name=item.name,
+            sort_order=item.sort_order,
+        )
+        for item in repository.list_categories()
+    }
+
+
+@router.post(
+    "/prompt-cards",
+    response_model=PromptCardItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_prompt_card(
+    request: Request,
+    title: str = Form(...),
+    prompt_text: str = Form(...),
+    image_manifest: str = Form(...),
+    new_images: list[UploadFile] = File(default=[]),
+    _: str = Depends(require_token),
+) -> PromptCardItem:
+    try:
+        selections = parse_image_manifest(image_manifest)
+        uploads = await _read_new_images(new_images)
+    except PromptCardValidationError as error:
+        raise _validation_http_error(error) from error
+
+    settings = request.app.state.settings
+    connection = sqlite3.connect(settings.database_path)
+    try:
+        repository = PromptCardRepository(connection)
+        service = PromptCardWriteService(
+            repository,
+            Path(settings.image_directory),
+        )
+        card = service.create_card(
+            title=title,
+            prompt_text=prompt_text,
+            selections=selections,
+            uploads=uploads,
+        )
+        return _to_prompt_card_item(card, category_map=_category_map(repository))
+    except PromptCardValidationError as error:
+        raise _validation_http_error(error) from error
+    except Exception as error:
+        logging.getLogger("app.prompt_cards").exception("创建提示词失败")
+        raise HTTPException(status_code=500, detail="保存提示词失败") from error
+    finally:
+        connection.close()
+
+
+@router.put("/prompt-cards/{card_id}", response_model=PromptCardItem)
+async def update_prompt_card(
+    card_id: int,
+    request: Request,
+    title: str = Form(...),
+    prompt_text: str = Form(...),
+    image_manifest: str = Form(...),
+    new_images: list[UploadFile] = File(default=[]),
+    _: str = Depends(require_token),
+) -> PromptCardItem:
+    try:
+        selections = parse_image_manifest(image_manifest)
+        uploads = await _read_new_images(new_images)
+    except PromptCardValidationError as error:
+        raise _validation_http_error(error) from error
+
+    settings = request.app.state.settings
+    connection = sqlite3.connect(settings.database_path)
+    try:
+        repository = PromptCardRepository(connection)
+        service = PromptCardWriteService(
+            repository,
+            Path(settings.image_directory),
+        )
+        card = service.update_card(
+            card_id,
+            title=title,
+            prompt_text=prompt_text,
+            selections=selections,
+            uploads=uploads,
+        )
+        return _to_prompt_card_item(card, category_map=_category_map(repository))
+    except PromptCardNotFoundError as error:
+        raise HTTPException(status_code=404, detail="提示词卡片不存在") from error
+    except PromptCardValidationError as error:
+        raise _validation_http_error(error) from error
+    except Exception as error:
+        logging.getLogger("app.prompt_cards").exception("编辑提示词失败")
+        raise HTTPException(status_code=500, detail="保存提示词失败") from error
+    finally:
+        connection.close()
+
+
+@router.delete(
+    "/prompt-cards/{card_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_prompt_card_route(
+    card_id: int,
+    request: Request,
+    _: str = Depends(require_token),
+) -> None:
+    settings = request.app.state.settings
+    connection = sqlite3.connect(settings.database_path)
+    try:
+        repository = PromptCardRepository(connection)
+        service = PromptCardWriteService(
+            repository,
+            Path(settings.image_directory),
+        )
+        service.delete_card(card_id)
+    except PromptCardNotFoundError as error:
+        raise HTTPException(status_code=404, detail="提示词卡片不存在") from error
+    except PromptCardInUseError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="该提示词存在生成历史，无法删除",
+        ) from error
+    except Exception as error:
+        logging.getLogger("app.prompt_cards").exception("删除提示词失败")
+        raise HTTPException(status_code=500, detail="删除提示词失败") from error
+    finally:
+        connection.close()
 
 
 @router.get("/categories", response_model=CategoryListResponse)
