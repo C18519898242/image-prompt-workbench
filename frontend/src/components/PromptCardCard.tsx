@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 import type { PromptCard } from "../api";
 
 type PromptCardCardProps = {
@@ -6,6 +8,9 @@ type PromptCardCardProps = {
   imageFailed: boolean;
   onImageError: () => void;
   onUsePrompt: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  actionsDisabled?: boolean;
   onPreview?: () => void;
 };
 
@@ -15,12 +20,55 @@ export function PromptCardCard({
   imageFailed,
   onImageError,
   onUsePrompt,
+  onEdit,
+  onDelete,
+  actionsDisabled = false,
   onPreview,
 }: PromptCardCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const summary =
     card.prompt_text.length > 80
       ? `${card.prompt_text.slice(0, 80)}…`
       : card.prompt_text;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const closeAndRestoreFocus = () => {
+      setMenuOpen(false);
+      triggerRef.current?.focus();
+    };
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!menuContainerRef.current?.contains(event.target as Node)) {
+        closeAndRestoreFocus();
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeAndRestoreFocus();
+      }
+    };
+
+    document.addEventListener("click", handleOutsideClick);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handleOutsideClick);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (actionsDisabled) setMenuOpen(false);
+  }, [actionsDisabled]);
+
+  const runMenuAction = (action: () => void) => {
+    setMenuOpen(false);
+    triggerRef.current?.focus();
+    action();
+  };
 
   return (
     <article className="prompt-card">
@@ -56,7 +104,41 @@ export function PromptCardCard({
         )}
       </div>
       <div className="prompt-card-body">
-        <h2 className="prompt-card-title">{card.title}</h2>
+        <div className="prompt-card-heading-row">
+          <h2 className="prompt-card-title">{card.title}</h2>
+          <div ref={menuContainerRef} className="prompt-card-menu">
+            <button
+              ref={triggerRef}
+              type="button"
+              className="prompt-card-menu-trigger"
+              aria-label={`${card.title}的更多操作`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              disabled={actionsDisabled}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              ⋯
+            </button>
+            {menuOpen && (
+              <div className="prompt-card-menu-popover" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => runMenuAction(onEdit)}
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => runMenuAction(onDelete)}
+                >
+                  删除
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
         {card.categories.length > 0 && (
           <ul className="prompt-card-tags">
             {card.categories.map((category) => (

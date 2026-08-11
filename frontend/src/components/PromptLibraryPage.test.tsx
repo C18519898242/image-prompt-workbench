@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
@@ -72,9 +72,10 @@ function renderLibrary(
 beforeEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
-    if (url.includes("/api/prompt-cards")) {
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/api/prompt-cards") && method === "GET") {
       return new Response(JSON.stringify({ items: [cardA, cardB] }), {
         status: 200,
       });
@@ -92,6 +93,263 @@ beforeEach(() => {
     }
     return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
   });
+});
+
+function mockDeleteResponse(status: number, detail?: string) {
+  const fetchMock = vi.mocked(fetch);
+  fetchMock.mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/prompt-cards/2" && method === "DELETE") {
+      return status === 204
+        ? new Response(null, { status: 204 })
+        : new Response(JSON.stringify({ detail }), { status });
+    }
+    if (url.includes("/api/prompt-cards") && method === "GET") {
+      return new Response(JSON.stringify({ items: [cardA, cardB] }), {
+        status: 200,
+      });
+    }
+    if (url.includes("/api/categories") && method === "GET") {
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
+  });
+  return fetchMock;
+}
+
+async function openCyberDelete(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole("button", { name: "赛博城市的更多操作" }),
+  );
+  await user.click(screen.getByRole("menuitem", { name: "删除" }));
+}
+
+function deferredResponse() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+test("从工具栏新增卡片并增量更新列表", async () => {
+  const cardC = {
+    ...cardA,
+    id: 3,
+    title: "新卡片",
+    prompt_text: "新提示词",
+    category_ids: [],
+    categories: [],
+  };
+  const fetchMock = vi.mocked(fetch);
+  fetchMock.mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/prompt-cards" && method === "POST") {
+      return new Response(JSON.stringify(cardC), { status: 201 });
+    }
+    if (url.includes("/api/prompt-cards") && method === "GET") {
+      return new Response(JSON.stringify({ items: [cardA, cardB] }), {
+        status: 200,
+      });
+    }
+    if (url.includes("/api/categories") && method === "GET") {
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
+  });
+  const user = userEvent.setup();
+  const scrollToMock = vi
+    .spyOn(window, "scrollTo")
+    .mockImplementation(() => {});
+  renderLibrary(vi.fn(), { ...defaultLibraryFilters, query: "新" });
+
+  await user.click(await screen.findByRole("button", { name: "新增提示词" }));
+  expect(screen.getByRole("dialog", { name: "新增提示词" })).toBeInTheDocument();
+  await user.type(screen.getByLabelText("标题"), "新卡片");
+  await user.type(screen.getByLabelText("提示词正文"), "新提示词");
+  await user.upload(
+    screen.getByLabelText("上传示例图"),
+    new File(["image"], "one.jpg", { type: "image/jpeg" }),
+  );
+  await user.click(screen.getByRole("button", { name: "保存提示词" }));
+
+  expect(await screen.findByText(cardC.title)).toBeInTheDocument();
+  expect(screen.getByLabelText("搜索提示词")).toHaveValue("新");
+  expect(scrollToMock).not.toHaveBeenCalled();
+  expect(
+    fetchMock.mock.calls.filter(
+      ([input]) => String(input) === "/api/prompt-cards",
+    ),
+  ).toHaveLength(2);
+});
+
+test("卡片菜单打开编辑抽屉并回填，保存后替换原实体", async () => {
+  const editedCard = { ...cardB, title: "赛博城市 2" };
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/prompt-cards/2" && method === "PUT") {
+      return new Response(JSON.stringify(editedCard), { status: 200 });
+    }
+    if (url.includes("/api/prompt-cards") && method === "GET") {
+      return new Response(JSON.stringify({ items: [cardA, cardB] }), {
+        status: 200,
+      });
+    }
+    if (url.includes("/api/categories") && method === "GET") {
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
+  });
+  const user = userEvent.setup();
+  renderLibrary();
+
+  await user.click(
+    await screen.findByRole("button", { name: "赛博城市的更多操作" }),
+  );
+  await user.click(screen.getByRole("menuitem", { name: "编辑" }));
+  expect(screen.getByRole("dialog", { name: "编辑提示词" })).toBeInTheDocument();
+  const title = screen.getByLabelText("标题");
+  expect(title).toHaveValue("赛博城市");
+  await user.clear(title);
+  await user.type(title, editedCard.title);
+  await user.click(screen.getByRole("button", { name: "保存提示词" }));
+
+  expect(await screen.findByText(editedCard.title)).toBeInTheDocument();
+  expect(screen.queryByText(cardB.title)).not.toBeInTheDocument();
+});
+
+test("卡片菜单支持 Escape、点击外部关闭并恢复触发按钮焦点", async () => {
+  const user = userEvent.setup();
+  renderLibrary();
+  const trigger = await screen.findByRole("button", {
+    name: "赛博城市的更多操作",
+  });
+
+  await user.click(trigger);
+  expect(screen.getByRole("menu")).toBeInTheDocument();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+
+  await user.click(trigger);
+  await user.click(screen.getByRole("heading", { name: "赛博城市" }));
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
+test("取消删除时不发送请求", async () => {
+  const fetchMock = mockDeleteResponse(204);
+  const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const user = userEvent.setup();
+  renderLibrary();
+
+  await openCyberDelete(user);
+
+  expect(confirmMock).toHaveBeenCalledWith(
+    "确定删除这个提示词？删除后无法恢复。",
+  );
+  expect(
+    fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE"),
+  ).toBe(false);
+});
+
+test("删除成功后从列表移除卡片", async () => {
+  mockDeleteResponse(204);
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const user = userEvent.setup();
+  renderLibrary();
+
+  await openCyberDelete(user);
+
+  await waitFor(() =>
+    expect(screen.queryByText("赛博城市")).not.toBeInTheDocument(),
+  );
+});
+
+test.each([
+  [404, "提示词卡片不存在", "提示词卡片已不存在", false],
+  [409, "该提示词存在生成历史，无法删除", "该提示词存在生成历史，无法删除", true],
+] as const)(
+  "删除错误状态 %s 显示明确反馈",
+  async (status, detail, message, keepsCard) => {
+    mockDeleteResponse(status, detail);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = userEvent.setup();
+    renderLibrary();
+
+    await openCyberDelete(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(Boolean(screen.queryByText("赛博城市"))).toBe(keepsCard);
+  },
+);
+
+test("未知删除错误显示安全提示并保留卡片", async () => {
+  const fetchMock = vi.mocked(fetch);
+  fetchMock.mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/prompt-cards/2" && method === "DELETE") {
+      throw new Error("network secret");
+    }
+    if (url.includes("/api/prompt-cards") && method === "GET") {
+      return new Response(JSON.stringify({ items: [cardA, cardB] }), { status: 200 });
+    }
+    if (url.includes("/api/categories") && method === "GET") {
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
+  });
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const user = userEvent.setup();
+  renderLibrary();
+
+  await openCyberDelete(user);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "删除提示词失败，请稍后重试",
+  );
+  expect(screen.getByText("赛博城市")).toBeInTheDocument();
+});
+
+test("删除请求进行中禁用卡片菜单并防止重复请求", async () => {
+  const deferred = deferredResponse();
+  const fetchMock = vi.mocked(fetch);
+  fetchMock.mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/prompt-cards/2" && method === "DELETE") {
+      return deferred.promise;
+    }
+    if (url.includes("/api/prompt-cards") && method === "GET") {
+      return new Response(JSON.stringify({ items: [cardA, cardB] }), { status: 200 });
+    }
+    if (url.includes("/api/categories") && method === "GET") {
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
+  });
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const user = userEvent.setup();
+  renderLibrary();
+
+  await openCyberDelete(user);
+
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "赛博城市的更多操作" }),
+    ).toBeDisabled(),
+  );
+  expect(
+    fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE"),
+  ).toHaveLength(1);
+  deferred.resolve(new Response(null, { status: 204 }));
+  await waitFor(() =>
+    expect(screen.queryByText("赛博城市")).not.toBeInTheDocument(),
+  );
 });
 
 test("显示首图和图片数量", async () => {

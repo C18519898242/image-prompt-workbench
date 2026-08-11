@@ -60,6 +60,7 @@ function mockAuthedApis(options?: {
   categories?: Response;
   histories?: Response | (() => Promise<Response>);
   generations?: () => Promise<Response>;
+  cardMutation?: (url: string, method: string) => Promise<Response> | Response;
 }) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
@@ -71,6 +72,9 @@ function mockAuthedApis(options?: {
       return options?.categories ?? emptyCategoriesResponse();
     }
     if (url.includes("/api/prompt-cards")) {
+      if (method !== "GET" && options?.cardMutation) {
+        return options.cardMutation(url, method);
+      }
       if (typeof options?.cards === "function") {
         return options.cards();
       }
@@ -132,6 +136,25 @@ beforeEach(() => {
   localStorage.clear();
   vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+});
+
+test("删除提示词返回 401 时回到登录页", async () => {
+  mockAuthedApis({
+    cards: jsonResponse({ items: [workspaceCardFixture] }),
+    cardMutation: () => jsonResponse({ detail: "Unauthorized" }, 401),
+  });
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const user = userEvent.setup();
+  renderApp();
+
+  await user.type(screen.getByLabelText("密码"), crypto.randomUUID());
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  await user.click(
+    await screen.findByRole("button", { name: "测试卡片的更多操作" }),
+  );
+  await user.click(screen.getByRole("menuitem", { name: "删除" }));
+
+  expect(await screen.findByLabelText("密码")).toBeInTheDocument();
 });
 
 test("logs in, shows prompt library navigation, and logs out", async () => {

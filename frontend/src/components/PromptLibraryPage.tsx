@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  deletePromptCard,
   getCategories,
   getPromptCards,
   type Category,
@@ -10,6 +11,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { ImageLightbox } from "./ImageLightbox";
 import { PromptCardCard } from "./PromptCardCard";
+import { PromptCardEditorDrawer } from "./PromptCardEditorDrawer";
 
 export type LibraryFilters = {
   query: string;
@@ -29,6 +31,11 @@ type PromptLibraryPageProps = {
   onFiltersChange: (filters: LibraryFilters) => void;
   onUsePrompt: (card: PromptCard) => void;
 };
+
+type EditorState =
+  | { mode: "create"; card: null }
+  | { mode: "edit"; card: PromptCard }
+  | null;
 
 export function filterPromptCards(
   cards: PromptCard[],
@@ -73,6 +80,9 @@ export function PromptLibraryPage({
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
   const [currentIndex, setCurrentIndex] = useState(1);
   const [failedImages, setFailedImages] = useState<Record<string, true>>({});
+  const [editor, setEditor] = useState<EditorState>(null);
+  const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const markFailed = (key: string) => {
     setFailedImages((current) =>
@@ -119,6 +129,46 @@ export function PromptLibraryPage({
     [cards, selectedCardId],
   );
 
+  const handleSaved = (saved: PromptCard) => {
+    setCards((current) => {
+      const exists = current.some((card) => card.id === saved.id);
+      return exists
+        ? current.map((card) => (card.id === saved.id ? saved : card))
+        : [saved, ...current];
+    });
+    setActionError(null);
+    setEditor(null);
+  };
+
+  const handleDelete = async (card: PromptCard) => {
+    if (deletingCardId != null) return;
+    if (!window.confirm("确定删除这个提示词？删除后无法恢复。")) return;
+
+    setDeletingCardId(card.id);
+    setActionError(null);
+    try {
+      await deletePromptCard(token, card.id);
+      setCards((current) => current.filter((item) => item.id !== card.id));
+    } catch (requestError: unknown) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        clearToken(token);
+        return;
+      }
+      if (requestError instanceof ApiError && requestError.status === 404) {
+        setCards((current) => current.filter((item) => item.id !== card.id));
+        setActionError("提示词卡片已不存在");
+        return;
+      }
+      setActionError(
+        requestError instanceof ApiError
+          ? requestError.message
+          : "删除提示词失败，请稍后重试",
+      );
+    } finally {
+      setDeletingCardId(null);
+    }
+  };
+
   if (loading) {
     return <p className="prompt-card-status">正在加载提示词…</p>;
   }
@@ -159,7 +209,23 @@ export function PromptLibraryPage({
           <option value="oldest">最旧</option>
           <option value="title">标题</option>
         </select>
+        <button
+          type="button"
+          className="btn btn-primary library-create-button"
+          onClick={() => {
+            setActionError(null);
+            setEditor({ mode: "create", card: null });
+          }}
+        >
+          新增提示词
+        </button>
       </div>
+
+      {actionError && (
+        <p className="library-action-error" role="alert">
+          {actionError}
+        </p>
+      )}
 
       <div className="library-filters">
         <button
@@ -208,6 +274,12 @@ export function PromptLibraryPage({
                 imageFailed={Boolean(failedImages[key])}
                 onImageError={() => markFailed(key)}
                 onUsePrompt={() => onUsePrompt(card)}
+                onEdit={() => {
+                  setActionError(null);
+                  setEditor({ mode: "edit", card });
+                }}
+                onDelete={() => void handleDelete(card)}
+                actionsDisabled={deletingCardId != null}
                 onPreview={() => {
                   setSelectedCardId(card.id);
                   setCurrentIndex(1);
@@ -258,6 +330,16 @@ export function PromptLibraryPage({
               Math.min(selectedCard.image_count || 1, index + 1),
             )
           }
+        />
+      )}
+
+      {editor && (
+        <PromptCardEditorDrawer
+          token={token}
+          mode={editor.mode}
+          card={editor.card}
+          onClose={() => setEditor(null)}
+          onSaved={handleSaved}
         />
       )}
     </section>
