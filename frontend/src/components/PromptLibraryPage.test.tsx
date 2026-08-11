@@ -240,6 +240,26 @@ test("卡片菜单支持 Escape、点击外部关闭并恢复触发按钮焦点"
   expect(trigger).toHaveFocus();
 });
 
+test("点击另一张卡的菜单按钮时由新按钮保留焦点", async () => {
+  const user = userEvent.setup();
+  renderLibrary();
+  const oldTrigger = await screen.findByRole("button", {
+    name: "江南烟雨的更多操作",
+  });
+  const newTrigger = screen.getByRole("button", {
+    name: "赛博城市的更多操作",
+  });
+
+  await user.click(oldTrigger);
+  expect(oldTrigger).toHaveAttribute("aria-expanded", "true");
+  await user.click(newTrigger);
+
+  expect(oldTrigger).toHaveAttribute("aria-expanded", "false");
+  expect(newTrigger).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getAllByRole("menu")).toHaveLength(1);
+  expect(newTrigger).toHaveFocus();
+});
+
 test("取消删除时不发送请求", async () => {
   const fetchMock = mockDeleteResponse(204);
   const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(false);
@@ -286,6 +306,19 @@ test.each([
     expect(Boolean(screen.queryByText("赛博城市"))).toBe(keepsCard);
   },
 );
+
+test("删除返回 500 时隐藏后端 detail 并显示安全提示", async () => {
+  mockDeleteResponse(500, "内部数据库路径 C:\\private\\prompt.db");
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const user = userEvent.setup();
+  renderLibrary();
+
+  await openCyberDelete(user);
+
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("删除提示词失败，请稍后重试");
+  expect(alert).not.toHaveTextContent("内部数据库路径");
+});
 
 test("未知删除错误显示安全提示并保留卡片", async () => {
   const fetchMock = vi.mocked(fetch);

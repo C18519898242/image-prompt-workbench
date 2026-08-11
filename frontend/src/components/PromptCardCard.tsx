@@ -42,7 +42,16 @@ export function PromptCardCard({
     };
     const handleOutsideClick = (event: MouseEvent) => {
       if (!menuContainerRef.current?.contains(event.target as Node)) {
-        closeAndRestoreFocus();
+        const clickedAnotherMenuTrigger =
+          event.target instanceof Element &&
+          event.target.closest(
+            '.prompt-card-menu-trigger[aria-haspopup="menu"]',
+          ) != null;
+        if (clickedAnotherMenuTrigger) {
+          setMenuOpen(false);
+        } else {
+          closeAndRestoreFocus();
+        }
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {

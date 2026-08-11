@@ -160,7 +160,7 @@ export function PromptLibraryPage({
         return;
       }
       setActionError(
-        requestError instanceof ApiError
+        requestError instanceof ApiError && requestError.status === 409
           ? requestError.message
           : "删除提示词失败，请稍后重试",
       );
