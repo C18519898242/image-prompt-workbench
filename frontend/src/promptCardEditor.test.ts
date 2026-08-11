@@ -55,6 +55,22 @@ test("混排图片生成连续上传索引", () => {
   expect(URL.createObjectURL).toHaveBeenCalledWith(file);
 });
 
+test("重复上传 id 不影响上传索引和文件顺序", () => {
+  vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "duplicate-id") });
+  vi.stubGlobal("URL", { createObjectURL: vi.fn((file: File) => `blob:${file.name}`) });
+  const first = new File(["first"], "first.png", { type: "image/png" });
+  const second = new File(["second"], "second.jpg", { type: "image/jpeg" });
+  const images = appendUploadImages([], [first, second]);
+
+  const request = buildPromptCardMutation("标题", "提示词", images);
+
+  expect(request.image_manifest).toEqual([
+    { kind: "upload", file_index: 0 },
+    { kind: "upload", file_index: 1 },
+  ]);
+  expect(request.new_images).toEqual([first, second]);
+});
+
 test("移动越界保持原数组，删除按 id 生效", () => {
   const images = initialEditorImages(cardB);
 
@@ -95,4 +111,18 @@ test("合法 JPG 和 PNG 文件通过快速校验", () => {
     sizedFile("a.jpg", "image/jpeg", 100),
     sizedFile("b.png", "image/png", 100),
   ], [])).toBeNull();
+});
+
+test.each([
+  [[sizedFile("a.jpg", "image/jpeg", 20 * 1024 * 1024)], [], "单张图片恰好 20 MB"],
+  [[sizedFile("a.jpg", "image/jpeg", 10 * 1024 * 1024)], [{
+    kind: "upload" as const,
+    id: "prior-upload",
+    file: sizedFile("prior.jpg", "image/jpeg", 90 * 1024 * 1024),
+    name: "prior.jpg",
+    previewUrl: "blob:prior",
+  }], "累计上传恰好 100 MB"],
+  [[sizedFile("a.jpg", "image/jpeg", 1)], twentyExisting.slice(0, 19), "图片数量恰好 20 张"],
+])("边界值通过快速校验：%s", (files, current) => {
+  expect(validateSelectedFiles(files, current)).toBeNull();
 });

@@ -1,4 +1,8 @@
-import type { PromptCard, PromptCardMutationRequest } from "./api";
+import type {
+  PromptCard,
+  PromptCardMutationRequest,
+  PromptImageManifestItem,
+} from "./api";
 
 export type EditorImage =
   | {
@@ -62,19 +66,19 @@ export function buildPromptCardMutation(
   promptText: string,
   images: EditorImage[],
 ): PromptCardMutationRequest {
-  const uploads = images.filter(
-    (image): image is Extract<EditorImage, { kind: "upload" }> => image.kind === "upload",
-  );
-  const uploadIndex = new Map(uploads.map((image, index) => [image.id, index]));
+  const imageManifest: PromptImageManifestItem[] = [];
+  const newImages: File[] = [];
 
-  return {
-    title,
-    prompt_text: promptText,
-    image_manifest: images.map((image) => image.kind === "existing"
-      ? { kind: "existing", image_index: image.imageIndex }
-      : { kind: "upload", file_index: uploadIndex.get(image.id)! }),
-    new_images: uploads.map((image) => image.file),
-  };
+  for (const image of images) {
+    if (image.kind === "existing") {
+      imageManifest.push({ kind: "existing", image_index: image.imageIndex });
+      continue;
+    }
+    imageManifest.push({ kind: "upload", file_index: newImages.length });
+    newImages.push(image.file);
+  }
+
+  return { title, prompt_text: promptText, image_manifest: imageManifest, new_images: newImages };
 }
 
 export function validateSelectedFiles(files: File[], current: EditorImage[]): string | null {
