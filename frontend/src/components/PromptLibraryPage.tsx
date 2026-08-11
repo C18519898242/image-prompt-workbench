@@ -130,6 +130,13 @@ export function PromptLibraryPage({
   );
 
   const handleSaved = (saved: PromptCard) => {
+    setFailedImages((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(
+          ([key]) => !key.startsWith(`${saved.id}:`),
+        ),
+      ),
+    );
     setCards((current) => {
       const exists = current.some((card) => card.id === saved.id);
       return exists

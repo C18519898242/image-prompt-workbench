@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
@@ -165,7 +165,8 @@ test("从工具栏新增卡片并增量更新列表", async () => {
     .mockImplementation(() => {});
   renderLibrary(vi.fn(), { ...defaultLibraryFilters, query: "新" });
 
-  await user.click(await screen.findByRole("button", { name: "新增提示词" }));
+  const createTrigger = await screen.findByRole("button", { name: "新增提示词" });
+  await user.click(createTrigger);
   expect(screen.getByRole("dialog", { name: "新增提示词" })).toBeInTheDocument();
   await user.type(screen.getByLabelText("标题"), "新卡片");
   await user.type(screen.getByLabelText("提示词正文"), "新提示词");
@@ -176,6 +177,7 @@ test("从工具栏新增卡片并增量更新列表", async () => {
   await user.click(screen.getByRole("button", { name: "保存提示词" }));
 
   expect(await screen.findByText(cardC.title)).toBeInTheDocument();
+  expect(createTrigger).toHaveFocus();
   expect(screen.getByLabelText("搜索提示词")).toHaveValue("新");
   expect(scrollToMock).not.toHaveBeenCalled();
   expect(
@@ -206,9 +208,10 @@ test("卡片菜单打开编辑抽屉并回填，保存后替换原实体", async
   const user = userEvent.setup();
   renderLibrary();
 
-  await user.click(
-    await screen.findByRole("button", { name: "赛博城市的更多操作" }),
-  );
+  const editTrigger = await screen.findByRole("button", {
+    name: "赛博城市的更多操作",
+  });
+  await user.click(editTrigger);
   await user.click(screen.getByRole("menuitem", { name: "编辑" }));
   expect(screen.getByRole("dialog", { name: "编辑提示词" })).toBeInTheDocument();
   const title = screen.getByLabelText("标题");
@@ -219,6 +222,19 @@ test("卡片菜单打开编辑抽屉并回填，保存后替换原实体", async
 
   expect(await screen.findByText(editedCard.title)).toBeInTheDocument();
   expect(screen.queryByText(cardB.title)).not.toBeInTheDocument();
+  expect(editTrigger).toHaveFocus();
+});
+
+test("取消新增抽屉后恢复工具栏触发按钮焦点", async () => {
+  const user = userEvent.setup();
+  renderLibrary();
+  const trigger = await screen.findByRole("button", { name: "新增提示词" });
+
+  await user.click(trigger);
+  await user.click(screen.getByRole("button", { name: "取消" }));
+
+  expect(screen.queryByRole("dialog", { name: "新增提示词" })).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
 });
 
 test("卡片菜单支持 Escape、点击外部关闭并恢复触发按钮焦点", async () => {
@@ -240,7 +256,35 @@ test("卡片菜单支持 Escape、点击外部关闭并恢复触发按钮焦点"
   expect(trigger).toHaveFocus();
 });
 
-test("点击另一张卡的菜单按钮时由新按钮保留焦点", async () => {
+test("卡片菜单打开后支持完整方向键、首尾键和 Escape 语义", async () => {
+  const user = userEvent.setup();
+  renderLibrary();
+  const trigger = await screen.findByRole("button", {
+    name: "赛博城市的更多操作",
+  });
+
+  await user.click(trigger);
+  const editItem = screen.getByRole("menuitem", { name: "编辑" });
+  const deleteItem = screen.getByRole("menuitem", { name: "删除" });
+  expect(editItem).toHaveFocus();
+
+  await user.keyboard("{ArrowDown}");
+  expect(deleteItem).toHaveFocus();
+  await user.keyboard("{ArrowDown}");
+  expect(editItem).toHaveFocus();
+  await user.keyboard("{ArrowUp}");
+  expect(deleteItem).toHaveFocus();
+  await user.keyboard("{Home}");
+  expect(editItem).toHaveFocus();
+  await user.keyboard("{End}");
+  expect(deleteItem).toHaveFocus();
+  await user.keyboard("{Escape}");
+
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
+test("点击另一张卡的菜单按钮时由新菜单项获得焦点", async () => {
   const user = userEvent.setup();
   renderLibrary();
   const oldTrigger = await screen.findByRole("button", {
@@ -257,7 +301,55 @@ test("点击另一张卡的菜单按钮时由新按钮保留焦点", async () =>
   expect(oldTrigger).toHaveAttribute("aria-expanded", "false");
   expect(newTrigger).toHaveAttribute("aria-expanded", "true");
   expect(screen.getAllByRole("menu")).toHaveLength(1);
-  expect(newTrigger).toHaveFocus();
+  expect(screen.getByRole("menuitem", { name: "编辑" })).toHaveFocus();
+});
+
+test("原图失败后保存有效新图会清除该卡片的占位状态", async () => {
+  const updatedCard = {
+    ...cardB,
+    example_image_path: "prompt-images/new-prefix-01.png",
+    images: [
+      {
+        index: 1,
+        path: "prompt-images/new-prefix-01.png",
+        url: "/media/prompt-images/new-prefix-01.png",
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/prompt-cards/2" && method === "PUT") {
+      return new Response(JSON.stringify(updatedCard), { status: 200 });
+    }
+    if (url.includes("/api/prompt-cards") && method === "GET") {
+      return new Response(JSON.stringify({ items: [cardA, cardB] }), { status: 200 });
+    }
+    if (url.includes("/api/categories") && method === "GET") {
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
+  });
+  const user = userEvent.setup();
+  renderLibrary();
+  const originalImage = await waitFor(() => {
+    const image = document.querySelector<HTMLImageElement>(
+      'img[src="/media/prompt-images/0002-01.png"]',
+    );
+    expect(image).not.toBeNull();
+    return image!;
+  });
+
+  fireEvent.error(originalImage);
+  await user.click(screen.getByRole("button", { name: "赛博城市的更多操作" }));
+  await user.click(screen.getByRole("menuitem", { name: "编辑" }));
+  await user.click(screen.getByRole("button", { name: "保存提示词" }));
+
+  await waitFor(() =>
+    expect(
+      document.querySelector('img[src="/media/prompt-images/new-prefix-01.png"]'),
+    ).not.toBeNull(),
+  );
 });
 
 test("取消删除时不发送请求", async () => {

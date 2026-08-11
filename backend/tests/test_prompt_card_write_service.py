@@ -322,9 +322,11 @@ def test_update_card_reorders_existing_and_upload_and_preserves_metadata(
     assert card.category_ids == (category_id,)
     assert card.sort_order == 9
     assert card.image_count == 3
+    assert not card.example_image_path.startswith("prompt-images/original-")
     paths = derive_image_paths(card.example_image_path, 3, image_directory)
     assert all(path.suffix == ".png" and path.is_file() for path in paths)
     assert not (image_directory / "original-01.jpg").exists()
+    assert not (image_directory / "original-02.jpg").exists()
 
 
 def test_update_card_missing_id_keeps_files(service_context):
@@ -395,7 +397,11 @@ def test_update_card_database_failure_restores_original_files(
     original_path = image_directory / "original-01.jpg"
     original_path.write_bytes(original)
 
+    attempted_path = ""
+
     def fail_update(*args, **kwargs):
+        nonlocal attempted_path
+        attempted_path = kwargs["example_image_path"]
         raise RuntimeError("数据库更新失败")
 
     monkeypatch.setattr(
@@ -413,6 +419,8 @@ def test_update_card_database_failure_restores_original_files(
             uploads=(),
         )
     assert original_path.read_bytes() == original
+    assert attempted_path != "prompt-images/original-01.jpg"
+    assert list(image_directory.glob("*.jpg")) == [original_path]
 
 
 def test_update_card_restores_database_and_image_when_atomic_read_is_missing(
@@ -570,7 +578,7 @@ def test_update_card_unlinks_png_when_isolation_replace_fails(
     assert not (image_directory / "isolate-01.png").exists()
 
 
-def test_update_card_restores_partial_backup_when_second_backup_fails(
+def test_update_card_keeps_old_files_when_second_new_replace_fails(
     service_context,
     monkeypatch,
 ):
@@ -589,14 +597,19 @@ def test_update_card_restores_partial_backup_when_second_backup_fails(
         old_paths.append(path)
     original_replace = Path.replace
 
-    def fail_second_backup(path: Path, destination: Path):
-        if path == old_paths[1] and destination.parent.name == "backup":
-            raise OSError("备份第二张旧图失败")
+    moved_new_files = 0
+
+    def fail_second_new_replace(path: Path, destination: Path):
+        nonlocal moved_new_files
+        if path.parent.name == "new" and destination.parent == image_directory:
+            moved_new_files += 1
+            if moved_new_files == 2:
+                raise OSError("写入第二张新图失败")
         return original_replace(path, destination)
 
-    monkeypatch.setattr(Path, "replace", fail_second_backup)
+    monkeypatch.setattr(Path, "replace", fail_second_new_replace)
 
-    with pytest.raises(OSError, match="备份第二张旧图失败"):
+    with pytest.raises(OSError, match="写入第二张新图失败"):
         service.update_card(
             card_id,
             title="新标题",
@@ -607,54 +620,12 @@ def test_update_card_restores_partial_backup_when_second_backup_fails(
 
     for path, content in zip(old_paths, originals, strict=True):
         assert path.read_bytes() == content
+    assert set(image_directory.glob("*.jpg")) == set(old_paths)
 
 
-def test_update_card_restores_old_files_when_second_new_replace_fails(
+def test_update_card_database_failure_never_moves_old_files(
     service_context,
     monkeypatch,
-):
-    service, repository, image_directory = service_context
-    card_id = repository.create_prompt_card(
-        title="旧标题",
-        prompt_text="旧提示词",
-        example_image_path="prompt-images/replace-01.jpg",
-        image_count=2,
-    )
-    originals = (image_bytes("JPEG"), image_bytes("JPEG", (0, 255, 0, 255)))
-    old_paths = []
-    for index, content in enumerate(originals, start=1):
-        path = image_directory / f"replace-{index:02d}.jpg"
-        path.write_bytes(content)
-        old_paths.append(path)
-    original_replace = Path.replace
-
-    def fail_second_new_replace(path: Path, destination: Path):
-        if path.parent.name == "new" and path.name == "replace-02.jpg":
-            raise OSError("替换第二张新图失败")
-        return original_replace(path, destination)
-
-    monkeypatch.setattr(Path, "replace", fail_second_new_replace)
-
-    with pytest.raises(OSError, match="替换第二张新图失败"):
-        service.update_card(
-            card_id,
-            title="新标题",
-            prompt_text="新提示词",
-            selections=(UploadSelection(0), UploadSelection(1)),
-            uploads=(
-                IncomingImage("one.jpg", image_bytes("JPEG", (0, 0, 255, 255))),
-                IncomingImage("two.jpg", image_bytes("JPEG", (255, 255, 0, 255))),
-            ),
-        )
-
-    for path, content in zip(old_paths, originals, strict=True):
-        assert path.read_bytes() == content
-
-
-def test_update_card_preserves_unrestored_backup_and_original_error(
-    service_context,
-    monkeypatch,
-    caplog,
 ):
     service, repository, image_directory = service_context
     card_id = repository.create_prompt_card(
@@ -674,11 +645,15 @@ def test_update_card_preserves_unrestored_backup_and_original_error(
     def fail_update(*args, **kwargs):
         raise RuntimeError("数据库更新失败")
 
+    old_paths = {
+        image_directory / f"recovery-{index:02d}.jpg"
+        for index in range(1, 4)
+    }
     original_replace = Path.replace
 
-    def fail_second_restore(path: Path, destination: Path):
-        if path.parent.name == "backup" and path.name == "recovery-02.jpg":
-            raise OSError("恢复第二张旧图失败")
+    def reject_old_image_move(path: Path, destination: Path):
+        if path in old_paths:
+            raise AssertionError("提交前不得移动旧图")
         return original_replace(path, destination)
 
     monkeypatch.setattr(
@@ -686,7 +661,7 @@ def test_update_card_preserves_unrestored_backup_and_original_error(
         "update_prompt_card_content_with_result",
         fail_update,
     )
-    monkeypatch.setattr(Path, "replace", fail_second_restore)
+    monkeypatch.setattr(Path, "replace", reject_old_image_move)
 
     with pytest.raises(RuntimeError, match="数据库更新失败"):
         service.update_card(
@@ -701,15 +676,8 @@ def test_update_card_preserves_unrestored_backup_and_original_error(
             uploads=(),
         )
 
-    assert (image_directory / "recovery-01.jpg").read_bytes() == originals[0]
-    assert (image_directory / "recovery-03.jpg").read_bytes() == originals[2]
-    preserved = list(
-        image_directory.glob(".recovery-*/backup/recovery-02.jpg")
-    )
-    assert len(preserved) == 1
-    assert preserved[0].read_bytes() == originals[1]
-    assert "恢复卡片原示例图失败" in caplog.text
-    assert str(preserved[0]) in caplog.text
+    for path, content in zip(sorted(old_paths), originals, strict=True):
+        assert path.read_bytes() == content
 
 
 def test_update_card_does_not_read_again_after_atomic_commit(
@@ -765,7 +733,7 @@ def test_update_card_does_not_read_again_after_atomic_commit(
     assert original_get(card_id) == card
 
 
-def test_update_card_logs_backup_cleanup_listing_failure_after_commit(
+def test_update_card_old_image_cleanup_failure_does_not_reverse_commit(
     service_context,
     monkeypatch,
     caplog,
@@ -777,14 +745,15 @@ def test_update_card_logs_backup_cleanup_listing_failure_after_commit(
         example_image_path="prompt-images/listing-01.jpg",
     )
     (image_directory / "listing-01.jpg").write_bytes(image_bytes("JPEG"))
-    original_iterdir = Path.iterdir
+    old_path = image_directory / "listing-01.jpg"
+    original_unlink = Path.unlink
 
-    def fail_backup_listing(path: Path):
-        if path.name == "backup":
-            raise OSError("读取备份目录失败")
-        return original_iterdir(path)
+    def fail_old_image_unlink(path: Path, *args, **kwargs):
+        if path == old_path:
+            raise OSError("删除旧图失败")
+        return original_unlink(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "iterdir", fail_backup_listing)
+    monkeypatch.setattr(Path, "unlink", fail_old_image_unlink)
 
     card = service.update_card(
         card_id,
@@ -796,8 +765,10 @@ def test_update_card_logs_backup_cleanup_listing_failure_after_commit(
 
     assert card.title == "新标题"
     assert repository.get_prompt_card(card_id) == card
-    assert (image_directory / "listing-01.jpg").is_file()
-    assert "读取待清理的卡片原图备份失败" in caplog.text
+    assert card.example_image_path != "prompt-images/listing-01.jpg"
+    assert (image_directory / Path(card.example_image_path).name).is_file()
+    assert old_path.is_file()
+    assert "清理已替换的卡片原图失败" in caplog.text
 
 
 def test_update_card_staging_failure_leaves_no_empty_recovery_directory(

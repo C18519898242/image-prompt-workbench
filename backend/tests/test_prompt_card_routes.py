@@ -3,6 +3,7 @@ from io import BytesIO
 import logging
 import sqlite3
 from pathlib import Path
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -213,6 +214,39 @@ def test_create_prompt_card_rejects_file_in_text_field(
     assert response.json()["detail"] == "表单数据无效"
 
 
+@pytest.mark.parametrize(
+    ("field_name", "expected_detail"),
+    (
+        ("title", "标题不能超过 64 KiB"),
+        ("prompt_text", "提示词正文不能超过 64 KiB"),
+        ("image_manifest", "图片顺序数据不能超过 64 KiB"),
+    ),
+)
+def test_create_prompt_card_returns_targeted_error_for_oversized_text_field(
+    prompt_card_client: TestClient,
+    password: str,
+    field_name: str,
+    expected_detail: str,
+) -> None:
+    token = _login(prompt_card_client, password)
+    data = {
+        "title": "标题",
+        "prompt_text": "提示词",
+        "image_manifest": '[{"kind":"upload","file_index":0}]',
+    }
+    data[field_name] = "x" * (prompt_card_routes.MAX_FORM_PART_BYTES + 1)
+
+    response = prompt_card_client.post(
+        "/api/prompt-cards",
+        headers={"Authorization": f"Bearer {token}"},
+        data=data,
+        files=[("new_images", ("one.jpg", _image_bytes(), "image/jpeg"))],
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == expected_detail
+
+
 def test_create_prompt_card_returns_complete_item(
     prompt_card_client: TestClient,
     password: str,
@@ -235,6 +269,36 @@ def test_create_prompt_card_returns_complete_item(
     assert body["category_ids"] == []
     assert body["image_count"] == 1
     assert body["images"][0]["url"].startswith("/media/prompt-images/")
+
+
+def test_create_prompt_card_does_not_query_categories_after_commit(
+    prompt_card_client: TestClient,
+    password: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject_category_query(*args: object, **kwargs: object) -> None:
+        raise AssertionError("创建空分类卡片不得查询分类")
+
+    monkeypatch.setattr(
+        prompt_card_routes.PromptCardRepository,
+        "list_categories",
+        reject_category_query,
+    )
+    token = _login(prompt_card_client, password)
+
+    response = prompt_card_client.post(
+        "/api/prompt-cards",
+        headers={"Authorization": f"Bearer {token}"},
+        data={
+            "title": "无需分类查询",
+            "prompt_text": "提示词",
+            "image_manifest": '[{"kind":"upload","file_index":0}]',
+        },
+        files=[("new_images", ("one.jpg", _image_bytes(), "image/jpeg"))],
+    )
+
+    assert response.status_code == 201
+    assert response.json()["categories"] == []
 
 
 def test_update_prompt_card_mixes_existing_and_upload(
@@ -261,6 +325,129 @@ def test_update_prompt_card_mixes_existing_and_upload(
     assert body["title"] == "编辑标题"
     assert body["image_count"] == 2
     assert all(image["path"].endswith(".png") for image in body["images"])
+
+
+def test_update_category_query_failure_happens_before_database_and_files(
+    prompt_card_client: TestClient,
+    password: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = prompt_card_client.app.state.settings
+    old_paths = sorted(settings.image_directory.glob("0001-*.jpg"))
+    old_contents = {path.name: path.read_bytes() for path in old_paths}
+
+    def fail_category_query(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("分类查询失败")
+
+    monkeypatch.setattr(
+        prompt_card_routes.PromptCardRepository,
+        "list_categories",
+        fail_category_query,
+    )
+    token = _login(prompt_card_client, password)
+
+    response = prompt_card_client.put(
+        "/api/prompt-cards/1",
+        headers={"Authorization": f"Bearer {token}"},
+        data={
+            "title": "不得写入的新标题",
+            "prompt_text": "不得写入的新提示词",
+            "image_manifest": '[{"kind":"upload","file_index":0}]',
+        },
+        files=[("new_images", ("new.png", _image_bytes("PNG"), "image/png"))],
+    )
+
+    assert response.status_code == 500
+    connection = sqlite3.connect(settings.database_path)
+    try:
+        card = PromptCardRepository(connection).get_prompt_card(1)
+    finally:
+        connection.close()
+    assert card is not None
+    assert (card.title, card.prompt_text) == ("多图卡片", "完整提示词")
+    assert card.example_image_path == "prompt-images/0001-01.jpg"
+    assert {
+        path.name: path.read_bytes()
+        for path in settings.image_directory.glob("*")
+        if path.is_file()
+    } == old_contents
+
+
+@pytest.mark.parametrize(
+    ("http_method", "path", "expected_status", "service_method"),
+    (
+        ("post", "/api/prompt-cards", 201, "create_card"),
+        ("put", "/api/prompt-cards/1", 200, "update_card"),
+    ),
+)
+def test_prompt_card_write_sync_unit_runs_in_threadpool(
+    prompt_card_client: TestClient,
+    password: str,
+    monkeypatch: pytest.MonkeyPatch,
+    http_method: str,
+    path: str,
+    expected_status: int,
+    service_method: str,
+) -> None:
+    parser_threads: list[int] = []
+    sync_threads: list[int] = []
+    original_parse = prompt_card_routes._parse_prompt_card_form
+    original_connect = sqlite3.connect
+    original_service_method = getattr(
+        prompt_card_routes.PromptCardWriteService,
+        service_method,
+    )
+    original_to_item = prompt_card_routes._to_prompt_card_item
+
+    class RecordingConnection(sqlite3.Connection):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            sync_threads.append(threading.get_ident())
+            super().__init__(*args, **kwargs)
+
+        def close(self) -> None:
+            sync_threads.append(threading.get_ident())
+            super().close()
+
+    async def record_parser_thread(request: StarletteRequest):
+        parser_threads.append(threading.get_ident())
+        return await original_parse(request)
+
+    def recording_connect(*args: object, **kwargs: object):
+        return original_connect(*args, **kwargs, factory=RecordingConnection)
+
+    def record_service_thread(self: object, *args: object, **kwargs: object):
+        sync_threads.append(threading.get_ident())
+        return original_service_method(self, *args, **kwargs)
+
+    def record_item_thread(*args: object, **kwargs: object):
+        sync_threads.append(threading.get_ident())
+        return original_to_item(*args, **kwargs)
+
+    monkeypatch.setattr(prompt_card_routes, "_parse_prompt_card_form", record_parser_thread)
+    monkeypatch.setattr(prompt_card_routes.sqlite3, "connect", recording_connect)
+    monkeypatch.setattr(
+        prompt_card_routes.PromptCardWriteService,
+        service_method,
+        record_service_thread,
+    )
+    monkeypatch.setattr(prompt_card_routes, "_to_prompt_card_item", record_item_thread)
+    token = _login(prompt_card_client, password)
+    response = getattr(prompt_card_client, http_method)(
+        path,
+        headers={"Authorization": f"Bearer {token}"},
+        data={
+            "title": "线程池写入",
+            "prompt_text": "线程池提示词",
+            "image_manifest": '[{"kind":"upload","file_index":0}]',
+        },
+        files=[("new_images", ("one.jpg", _image_bytes(), "image/jpeg"))],
+    )
+
+    assert response.status_code == expected_status
+    assert len(parser_threads) == 1
+    assert len(sync_threads) >= 4
+    assert len(set(sync_threads)) == 1
+    assert sync_threads[0] != parser_threads[0]
 
 
 def test_delete_prompt_card_without_history_returns_204(
@@ -600,7 +787,11 @@ def test_create_prompt_card_hides_form_parser_errors(
     async def fail_form(*args: object, **kwargs: object) -> None:
         raise RuntimeError("内部解析器信息")
 
-    monkeypatch.setattr(StarletteRequest, "form", fail_form)
+    monkeypatch.setattr(
+        prompt_card_routes.PromptCardMultiPartParser,
+        "parse",
+        fail_form,
+    )
     with (
         TestClient(
             prompt_card_client.app,

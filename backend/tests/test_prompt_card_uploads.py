@@ -81,6 +81,51 @@ def test_prepare_final_images_converts_decompression_bomb_to_validation_error(mo
     assert captured.value.code == "invalid_image"
 
 
+def test_prepare_final_images_converts_real_decompression_bomb_warning(
+    monkeypatch,
+):
+    content = image_bytes("JPEG")
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 8)
+    monkeypatch.setattr(
+        uploads_module,
+        "MAX_ALLOWED_IMAGE_PIXELS",
+        100,
+        raising=False,
+    )
+
+    with pytest.raises(PromptCardValidationError) as captured:
+        prepare_final_images(
+            (UploadSelection(0),),
+            {},
+            [IncomingImage("warning.jpg", content)],
+        )
+
+    assert captured.value.code == "invalid_image"
+
+
+@pytest.mark.parametrize(
+    ("constant_name", "limit"),
+    (
+        ("MAX_IMAGE_WIDTH", 3),
+        ("MAX_IMAGE_HEIGHT", 3),
+        ("MAX_ALLOWED_IMAGE_PIXELS", 15),
+    ),
+)
+def test_encode_png_rejects_real_image_dimensions_before_loading(
+    monkeypatch,
+    constant_name,
+    limit,
+):
+    content = image_bytes("PNG")
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", None)
+    monkeypatch.setattr(uploads_module, constant_name, limit, raising=False)
+
+    with pytest.raises(PromptCardValidationError) as captured:
+        uploads_module._encode_png(content)
+
+    assert captured.value.code == "invalid_image"
+
+
 def test_encode_png_converts_decompression_bomb_to_validation_error(monkeypatch):
     def raise_decompression_bomb(*args, **kwargs):
         raise Image.DecompressionBombError("图片像素数过大")

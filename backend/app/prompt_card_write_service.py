@@ -184,40 +184,6 @@ class PromptCardWriteService:
                 "原示例图文件不可用",
             ) from error
 
-    def _restore_backup(self, backup_directory: Path) -> None:
-        try:
-            backups = list(backup_directory.iterdir())
-        except OSError:
-            LOGGER.exception("读取卡片原图备份失败: %s", backup_directory)
-            return
-        for backup in backups:
-            try:
-                backup.replace(self._image_directory / backup.name)
-            except OSError:
-                LOGGER.exception(
-                    "恢复卡片原示例图失败，备份保留在: %s",
-                    backup,
-                )
-
-    def _discard_backup(
-        self,
-        recovery_root: Path,
-        backup_directory: Path,
-    ) -> None:
-        try:
-            backups = list(backup_directory.iterdir())
-        except OSError:
-            LOGGER.exception(
-                "读取待清理的卡片原图备份失败，备份保留在: %s",
-                backup_directory,
-            )
-            return
-        self._unlink_independently(
-            backups,
-            failure_message="清理已替换的卡片原图失败",
-        )
-        self._remove_empty_recovery(recovery_root)
-
     def update_card(
         self,
         card_id: int,
@@ -242,7 +208,7 @@ class PromptCardWriteService:
             card.image_count,
             self._image_directory,
         )
-        prefix = Path(card.example_image_path).stem.rsplit("-", 1)[0]
+        prefix = uuid4().hex
         new_paths: list[Path] = []
         with tempfile.TemporaryDirectory(
             dir=self._image_directory,
@@ -255,12 +221,7 @@ class PromptCardWriteService:
                 prepared.extension,
                 prepared.contents,
             )
-            recovery_root = self._image_directory / f".recovery-{uuid4().hex}"
-            backup_directory = recovery_root / "backup"
-            backup_directory.mkdir(parents=True)
             try:
-                for old_path in old_paths:
-                    old_path.replace(backup_directory / old_path.name)
                 for staged_path in staged:
                     destination = self._image_directory / staged_path.name
                     staged_path.replace(destination)
@@ -281,12 +242,12 @@ class PromptCardWriteService:
                 self._discard_visible_paths(
                     new_paths,
                     failure_message="回收更新后的卡片图片失败",
-                    recovery_root=recovery_root,
                 )
-                self._restore_backup(backup_directory)
-                self._remove_empty_recovery(recovery_root)
                 raise
-        self._discard_backup(recovery_root, backup_directory)
+        self._unlink_independently(
+            old_paths,
+            failure_message="清理已替换的卡片原图失败",
+        )
         return updated_card
 
     def delete_card(self, card_id: int) -> None:

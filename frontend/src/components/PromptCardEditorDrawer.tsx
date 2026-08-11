@@ -89,6 +89,11 @@ export function PromptCardEditorDrawer({
   const [saving, setSaving] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
   const draggedIndexRef = useRef<number | null>(null);
   const mountedRef = useRef(false);
   const uploadUrlsRef = useRef(new Set<string>());
@@ -124,6 +129,10 @@ export function PromptCardEditorDrawer({
     return () => {
       mountedRef.current = false;
       revokeAllUploadUrls();
+      const restoreTarget = restoreFocusRef.current;
+      if (restoreTarget?.isConnected) {
+        restoreTarget.focus();
+      }
     };
   }, [revokeAllUploadUrls]);
 

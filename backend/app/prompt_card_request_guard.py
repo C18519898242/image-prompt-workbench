@@ -9,7 +9,7 @@ MULTIPART_OVERHEAD_BYTES = 1024 * 1024
 MAX_PROMPT_CARD_REQUEST_BYTES = MAX_TOTAL_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES
 
 
-class PromptCardRequestTooLarge(Exception):
+class PromptCardRequestTooLarge(OSError):
     pass
 
 

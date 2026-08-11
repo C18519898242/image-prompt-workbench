@@ -4,12 +4,16 @@ from dataclasses import dataclass
 from io import BytesIO
 import json
 from typing import Mapping, Sequence
+import warnings
 
 from PIL import Image, UnidentifiedImageError
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_TOTAL_UPLOAD_BYTES = 100 * 1024 * 1024
 MAX_IMAGE_COUNT = 20
+MAX_IMAGE_WIDTH = 16_384
+MAX_IMAGE_HEIGHT = 16_384
+MAX_ALLOWED_IMAGE_PIXELS = 40_000_000
 
 
 class PromptCardValidationError(ValueError):
@@ -41,6 +45,16 @@ ImageSelection = ExistingSelection | UploadSelection
 class PreparedImages:
     extension: str
     contents: tuple[bytes, ...]
+
+
+def _validate_image_dimensions(image: Image.Image) -> None:
+    width, height = image.size
+    if (
+        width > MAX_IMAGE_WIDTH
+        or height > MAX_IMAGE_HEIGHT
+        or width * height > MAX_ALLOWED_IMAGE_PIXELS
+    ):
+        raise PromptCardValidationError("invalid_image", "图片尺寸过大")
 
 
 def parse_image_manifest(raw: str) -> tuple[ImageSelection, ...]:
@@ -77,11 +91,17 @@ def parse_image_manifest(raw: str) -> tuple[ImageSelection, ...]:
 
 def _detect_format(content: bytes) -> str:
     try:
-        with Image.open(BytesIO(content)) as image:
-            image.verify()
-            format_name = image.format
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(content)) as image:
+                _validate_image_dimensions(image)
+                image.verify()
+                format_name = image.format
+    except PromptCardValidationError:
+        raise
     except (
         Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
         UnidentifiedImageError,
         OSError,
         ValueError,
@@ -96,13 +116,19 @@ def _detect_format(content: bytes) -> str:
 
 def _encode_png(content: bytes) -> bytes:
     try:
-        with Image.open(BytesIO(content)) as image:
-            image.load()
-            output = BytesIO()
-            image.save(output, format="PNG")
-            return output.getvalue()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(content)) as image:
+                _validate_image_dimensions(image)
+                image.load()
+                output = BytesIO()
+                image.save(output, format="PNG")
+                return output.getvalue()
+    except PromptCardValidationError:
+        raise
     except (
         Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
         UnidentifiedImageError,
         OSError,
         ValueError,

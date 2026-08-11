@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 
 import type { PromptCard } from "../api";
 
@@ -27,6 +32,7 @@ export function PromptCardCard({
 }: PromptCardCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuContainerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const summary =
     card.prompt_text.length > 80
@@ -54,19 +60,18 @@ export function PromptCardCard({
         }
       }
     };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeAndRestoreFocus();
-      }
-    };
-
     document.addEventListener("click", handleOutsideClick);
-    window.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("click", handleOutsideClick);
-      window.removeEventListener("keydown", handleKeyDown);
     };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (menuOpen) {
+      menuRef.current
+        ?.querySelector<HTMLButtonElement>('[role="menuitem"]')
+        ?.focus();
+    }
   }, [menuOpen]);
 
   useEffect(() => {
@@ -77,6 +82,32 @@ export function PromptCardCard({
     setMenuOpen(false);
     triggerRef.current?.focus();
     action();
+  };
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitem"]:not(:disabled)',
+      ),
+    );
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMenuOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    let nextIndex = 0;
+    if (event.key === "End" || event.key === "ArrowUp" && currentIndex <= 0) {
+      nextIndex = items.length - 1;
+    } else if (event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % items.length;
+    } else if (event.key === "ArrowUp") {
+      nextIndex = currentIndex - 1;
+    }
+    items[nextIndex]?.focus();
   };
 
   return (
@@ -129,7 +160,12 @@ export function PromptCardCard({
               ⋯
             </button>
             {menuOpen && (
-              <div className="prompt-card-menu-popover" role="menu">
+              <div
+                ref={menuRef}
+                className="prompt-card-menu-popover"
+                role="menu"
+                onKeyDown={handleMenuKeyDown}
+              >
                 <button
                   type="button"
                   role="menuitem"
