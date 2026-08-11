@@ -125,6 +125,31 @@ function deferredResponse() {
   return { promise, resolve, reject };
 }
 
+async function renderFailedSaveWithDialogFocus() {
+  const deferred = deferredResponse();
+  vi.stubGlobal("fetch", vi.fn().mockReturnValue(deferred.promise));
+  const user = userEvent.setup();
+  renderDrawer({ mode: "create", card: null });
+  await fillCreateForm(user);
+  await user.click(screen.getByRole("button", { name: "保存提示词" }));
+  const dialog = screen.getByRole("dialog", { name: "新增提示词" });
+  await user.tab();
+  expect(dialog).toHaveFocus();
+
+  await act(async () => {
+    deferred.resolve(
+      new Response(JSON.stringify({ detail: "保存提示词失败" }), {
+        status: 500,
+      }),
+    );
+    await deferred.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(await screen.findByRole("alert")).toHaveTextContent("保存提示词失败");
+  expect(dialog).toHaveFocus();
+  return { dialog, user };
+}
+
 test("新增抽屉要求标题、提示词和至少一张图片", async () => {
   const user = userEvent.setup();
   renderDrawer({ mode: "create", card: null });
@@ -249,6 +274,26 @@ test("保存期间 Tab 不进入禁用控件或背景区域", async () => {
   expect(screen.getByRole("button", { name: "抽屉前背景按钮" })).not.toHaveFocus();
   expect(screen.getByRole("button", { name: "抽屉后背景按钮" })).not.toHaveFocus();
   deferred.resolve(new Response(JSON.stringify(savedCard), { status: 200 }));
+});
+
+test("保存失败恢复控件后 Shift+Tab 从 dialog 回到最后一项", async () => {
+  const { user } = await renderFailedSaveWithDialogFocus();
+
+  await user.tab({ shift: true });
+
+  expect(screen.getByRole("button", { name: "保存提示词" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "抽屉前背景按钮" })).not.toHaveFocus();
+  expect(screen.getByRole("button", { name: "抽屉后背景按钮" })).not.toHaveFocus();
+});
+
+test("保存失败恢复控件后 Tab 从 dialog 进入第一项", async () => {
+  const { user } = await renderFailedSaveWithDialogFocus();
+
+  await user.tab();
+
+  expect(screen.getByRole("button", { name: "关闭" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "抽屉前背景按钮" })).not.toHaveFocus();
+  expect(screen.getByRole("button", { name: "抽屉后背景按钮" })).not.toHaveFocus();
 });
 
 test("多选图片按选择顺序追加", async () => {

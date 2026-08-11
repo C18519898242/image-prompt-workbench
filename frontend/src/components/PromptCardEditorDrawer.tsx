@@ -152,17 +152,19 @@ export function PromptCardEditorDrawer({
       }
 
       const activeElement = document.activeElement;
+      const activeIndex = focusableElements.indexOf(activeElement as HTMLElement);
+      if (activeIndex === -1) {
+        event.preventDefault();
+        (event.shiftKey ? lastElement : firstElement).focus();
+        return;
+      }
       if (event.shiftKey) {
-        if (activeElement !== firstElement && dialogRef.current.contains(activeElement)) {
-          return;
-        }
+        if (activeIndex !== 0) return;
         event.preventDefault();
         lastElement.focus();
         return;
       }
-      if (activeElement !== lastElement && dialogRef.current.contains(activeElement)) {
-        return;
-      }
+      if (activeIndex !== focusableElements.length - 1) return;
       event.preventDefault();
       firstElement.focus();
     };
