@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type FocusEvent as ReactFocusEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
@@ -34,6 +35,7 @@ export function PromptCardCard({
   const menuContainerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const tabNavigationRef = useRef(false);
   const summary =
     card.prompt_text.length > 80
       ? `${card.prompt_text.slice(0, 80)}…`
@@ -85,6 +87,10 @@ export function PromptCardCard({
   };
 
   const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Tab") {
+      tabNavigationRef.current = true;
+      return;
+    }
     const items = Array.from(
       event.currentTarget.querySelectorAll<HTMLButtonElement>(
         '[role="menuitem"]:not(:disabled)',
@@ -108,6 +114,16 @@ export function PromptCardCard({
       nextIndex = currentIndex - 1;
     }
     items[nextIndex]?.focus();
+  };
+
+  const handleMenuBlur = (event: ReactFocusEvent<HTMLDivElement>) => {
+    const leftMenu = !event.currentTarget.contains(
+      event.relatedTarget as Node | null,
+    );
+    if (tabNavigationRef.current && leftMenu) {
+      setMenuOpen(false);
+    }
+    tabNavigationRef.current = false;
   };
 
   return (
@@ -165,6 +181,7 @@ export function PromptCardCard({
                 className="prompt-card-menu-popover"
                 role="menu"
                 onKeyDown={handleMenuKeyDown}
+                onBlur={handleMenuBlur}
               >
                 <button
                   type="button"

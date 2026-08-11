@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+import app.prompt_card_uploads as uploads_module
 from app.prompt_card_images import derive_image_paths
 from app.prompt_card_repository import PromptCardInUseError, PromptCardRepository
 from app.prompt_card_uploads import (
@@ -109,6 +110,38 @@ def test_create_card_database_failure_removes_written_images(
             selections=(UploadSelection(0),),
             uploads=(IncomingImage("new.jpg", image_bytes("JPEG")),),
         )
+    assert list(image_directory.iterdir()) == []
+
+
+def test_create_card_output_budget_failure_cleans_staged_files(
+    service_context,
+    monkeypatch,
+):
+    service, repository, image_directory = service_context
+    content = image_bytes("JPEG")
+    monkeypatch.setattr(
+        uploads_module,
+        "MAX_STAGED_OUTPUT_BYTES",
+        len(content) * 2 - 1,
+        raising=False,
+    )
+
+    with pytest.raises(
+        PromptCardValidationError,
+        match="最终图片暂存总量",
+    ) as captured:
+        service.create_card(
+            title="标题",
+            prompt_text="提示词",
+            selections=(UploadSelection(0), UploadSelection(1)),
+            uploads=(
+                IncomingImage("one.jpg", content),
+                IncomingImage("two.jpg", content),
+            ),
+        )
+
+    assert captured.value.code == "total_output_too_large"
+    assert repository.list_prompt_cards() == []
     assert list(image_directory.iterdir()) == []
 
 
@@ -421,6 +454,51 @@ def test_update_card_database_failure_restores_original_files(
     assert original_path.read_bytes() == original
     assert attempted_path != "prompt-images/original-01.jpg"
     assert list(image_directory.glob("*.jpg")) == [original_path]
+
+
+def test_update_card_output_budget_failure_keeps_database_and_old_files(
+    service_context,
+    monkeypatch,
+):
+    service, repository, image_directory = service_context
+    card_id = repository.create_prompt_card(
+        title="旧标题",
+        prompt_text="旧提示词",
+        example_image_path="prompt-images/budget-01.jpg",
+    )
+    original = image_bytes("JPEG")
+    old_path = image_directory / "budget-01.jpg"
+    old_path.write_bytes(original)
+    replacement = image_bytes("JPEG", (0, 255, 0, 255))
+    monkeypatch.setattr(
+        uploads_module,
+        "MAX_STAGED_OUTPUT_BYTES",
+        len(replacement) * 2 - 1,
+        raising=False,
+    )
+
+    with pytest.raises(
+        PromptCardValidationError,
+        match="最终图片暂存总量",
+    ) as captured:
+        service.update_card(
+            card_id,
+            title="新标题",
+            prompt_text="新提示词",
+            selections=(UploadSelection(0), UploadSelection(1)),
+            uploads=(
+                IncomingImage("one.jpg", replacement),
+                IncomingImage("two.jpg", replacement),
+            ),
+        )
+
+    assert captured.value.code == "total_output_too_large"
+    card = repository.get_prompt_card(card_id)
+    assert card is not None
+    assert (card.title, card.prompt_text) == ("旧标题", "旧提示词")
+    assert card.example_image_path == "prompt-images/budget-01.jpg"
+    assert old_path.read_bytes() == original
+    assert list(image_directory.glob("*.jpg")) == [old_path]
 
 
 def test_update_card_restores_database_and_image_when_atomic_read_is_missing(

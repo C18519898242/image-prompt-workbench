@@ -10,8 +10,10 @@ from app.prompt_card_repository import PromptCard, PromptCardRepository
 from app.prompt_card_uploads import (
     ImageSelection,
     IncomingImage,
+    PreparedImages,
     PromptCardValidationError,
     prepare_final_images,
+    stage_prepared_images,
 )
 
 LOGGER = logging.getLogger("app.prompt_cards")
@@ -47,16 +49,9 @@ class PromptCardWriteService:
     def _write_staged(
         directory: Path,
         prefix: str,
-        extension: str,
-        contents: tuple[bytes, ...],
+        prepared: PreparedImages,
     ) -> list[Path]:
-        directory.mkdir(parents=True, exist_ok=True)
-        paths = []
-        for index, content in enumerate(contents, start=1):
-            path = directory / f"{prefix}-{index:02d}{extension}"
-            path.write_bytes(content)
-            paths.append(path)
-        return paths
+        return stage_prepared_images(prepared, directory, prefix)
 
     def _discard_visible_paths(
         self,
@@ -140,8 +135,7 @@ class PromptCardWriteService:
             staged = self._write_staged(
                 Path(temporary),
                 prefix,
-                prepared.extension,
-                prepared.contents,
+                prepared,
             )
             try:
                 for staged_path in staged:
@@ -155,7 +149,7 @@ class PromptCardWriteService:
                         prefix,
                         prepared.extension,
                     ),
-                    image_count=len(prepared.contents),
+                    image_count=prepared.image_count,
                     sort_order=0,
                     category_ids=(),
                 )
@@ -166,23 +160,6 @@ class PromptCardWriteService:
                 )
                 raise
         return card
-
-    def _read_existing(self, card: PromptCard) -> dict[int, bytes]:
-        paths = derive_image_paths(
-            card.example_image_path,
-            card.image_count,
-            self._image_directory,
-        )
-        try:
-            return {
-                index: path.read_bytes()
-                for index, path in enumerate(paths, start=1)
-            }
-        except OSError as error:
-            raise PromptCardValidationError(
-                "invalid_image",
-                "原示例图文件不可用",
-            ) from error
 
     def update_card(
         self,
@@ -198,15 +175,18 @@ class PromptCardWriteService:
             raise PromptCardNotFoundError(card_id)
         title = self._normalize_text(title, "请输入标题")
         prompt_text = self._normalize_text(prompt_text, "请输入提示词")
-        prepared = prepare_final_images(
-            selections,
-            self._read_existing(card),
-            uploads,
-        )
         old_paths = derive_image_paths(
             card.example_image_path,
             card.image_count,
             self._image_directory,
+        )
+        prepared = prepare_final_images(
+            selections,
+            {
+                index: path
+                for index, path in enumerate(old_paths, start=1)
+            },
+            uploads,
         )
         prefix = uuid4().hex
         new_paths: list[Path] = []
@@ -218,8 +198,7 @@ class PromptCardWriteService:
             staged = self._write_staged(
                 temporary_path / "new",
                 prefix,
-                prepared.extension,
-                prepared.contents,
+                prepared,
             )
             try:
                 for staged_path in staged:
@@ -234,7 +213,7 @@ class PromptCardWriteService:
                         prefix,
                         prepared.extension,
                     ),
-                    image_count=len(prepared.contents),
+                    image_count=prepared.image_count,
                 )
                 if updated_card is None:
                     raise PromptCardNotFoundError(card_id)

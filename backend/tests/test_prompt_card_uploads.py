@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -47,14 +48,19 @@ def test_parse_image_manifest_rejects_invalid_shape(raw):
     assert captured.value.code in {"invalid_manifest", "empty_images"}
 
 
-def test_prepare_final_images_keeps_all_jpeg():
+def test_prepare_final_images_keeps_sources_instead_of_output_bytes(tmp_path: Path):
     uploads = [IncomingImage("one.jpg", image_bytes("JPEG"))]
     result = prepare_final_images((UploadSelection(0),), {}, uploads)
+
     assert result.extension == ".jpg"
-    assert result.contents == (uploads[0].content,)
+    assert not hasattr(result, "contents")
+    assert result.sources == tuple(uploads)
+    paths = uploads_module.stage_prepared_images(result, tmp_path, "streamed")
+    assert [path.name for path in paths] == ["streamed-01.jpg"]
+    assert paths[0].read_bytes() == uploads[0].content
 
 
-def test_prepare_final_images_converts_mixed_input_to_png():
+def test_prepare_final_images_converts_mixed_input_to_png(tmp_path: Path):
     uploads = [
         IncomingImage("one.jpg", image_bytes("JPEG")),
         IncomingImage("two.png", image_bytes("PNG")),
@@ -63,10 +69,34 @@ def test_prepare_final_images_converts_mixed_input_to_png():
         (UploadSelection(0), UploadSelection(1)), {}, uploads
     )
     assert result.extension == ".png"
-    for content in result.contents:
-        with Image.open(BytesIO(content)) as image:
+    assert not hasattr(result, "contents")
+    paths = uploads_module.stage_prepared_images(result, tmp_path, "mixed")
+    for path in paths:
+        with Image.open(path) as image:
             image.verify()
             assert image.format == "PNG"
+
+
+def test_prepare_final_images_rejects_cumulative_pixel_budget(monkeypatch):
+    uploads = [
+        IncomingImage("one.jpg", image_bytes("JPEG")),
+        IncomingImage("two.jpg", image_bytes("JPEG")),
+    ]
+    monkeypatch.setattr(
+        uploads_module,
+        "MAX_FINAL_IMAGE_PIXELS",
+        31,
+        raising=False,
+    )
+
+    with pytest.raises(PromptCardValidationError, match="最终图片总像素") as captured:
+        prepare_final_images(
+            (UploadSelection(0), UploadSelection(1)),
+            {},
+            uploads,
+        )
+
+    assert captured.value.code == "total_pixels_too_large"
 
 
 def test_prepare_final_images_converts_decompression_bomb_to_validation_error(monkeypatch):
@@ -111,7 +141,7 @@ def test_prepare_final_images_converts_real_decompression_bomb_warning(
         ("MAX_ALLOWED_IMAGE_PIXELS", 15),
     ),
 )
-def test_encode_png_rejects_real_image_dimensions_before_loading(
+def test_prepare_rejects_real_image_dimensions_before_loading(
     monkeypatch,
     constant_name,
     limit,
@@ -121,19 +151,33 @@ def test_encode_png_rejects_real_image_dimensions_before_loading(
     monkeypatch.setattr(uploads_module, constant_name, limit, raising=False)
 
     with pytest.raises(PromptCardValidationError) as captured:
-        uploads_module._encode_png(content)
+        prepare_final_images(
+            (UploadSelection(0),),
+            {},
+            [IncomingImage("large.png", content)],
+        )
 
     assert captured.value.code == "invalid_image"
 
 
-def test_encode_png_converts_decompression_bomb_to_validation_error(monkeypatch):
+def test_stage_png_converts_decompression_bomb_to_validation_error(
+    monkeypatch,
+    tmp_path: Path,
+):
+    prepared = prepare_final_images(
+        (UploadSelection(0),),
+        {},
+        [IncomingImage("one.png", image_bytes("PNG"))],
+    )
+
     def raise_decompression_bomb(*args, **kwargs):
         raise Image.DecompressionBombError("图片像素数过大")
 
     monkeypatch.setattr(uploads_module.Image, "open", raise_decompression_bomb)
     with pytest.raises(PromptCardValidationError) as captured:
-        uploads_module._encode_png(b"content")
+        uploads_module.stage_prepared_images(prepared, tmp_path, "bomb")
     assert captured.value.code == "invalid_image"
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_prepare_final_images_rejects_fake_jpeg():

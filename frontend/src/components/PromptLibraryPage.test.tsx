@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
@@ -279,6 +285,39 @@ test("卡片菜单打开后支持完整方向键、首尾键和 Escape 语义", 
   await user.keyboard("{End}");
   expect(deleteItem).toHaveFocus();
   await user.keyboard("{Escape}");
+
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
+test("Tab 离开菜单时关闭菜单并继续到卡片后续按钮", async () => {
+  const user = userEvent.setup();
+  renderLibrary();
+  const trigger = await screen.findByRole("button", {
+    name: "赛博城市的更多操作",
+  });
+  const card = trigger.closest("article");
+  expect(card).not.toBeNull();
+
+  await user.click(trigger);
+  await user.keyboard("{End}");
+  expect(screen.getByRole("menuitem", { name: "删除" })).toHaveFocus();
+  await user.tab();
+
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  expect(within(card!).getByRole("button", { name: "使用此提示词" })).toHaveFocus();
+});
+
+test("Shift+Tab 离开菜单时关闭菜单并回到触发按钮", async () => {
+  const user = userEvent.setup();
+  renderLibrary();
+  const trigger = await screen.findByRole("button", {
+    name: "赛博城市的更多操作",
+  });
+
+  await user.click(trigger);
+  expect(screen.getByRole("menuitem", { name: "编辑" })).toHaveFocus();
+  await user.tab({ shift: true });
 
   expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   expect(trigger).toHaveFocus();

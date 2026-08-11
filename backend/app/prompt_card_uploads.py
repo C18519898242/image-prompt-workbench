@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 import json
-from typing import Mapping, Sequence
+from pathlib import Path
+from typing import BinaryIO, Mapping, Sequence
 import warnings
 
 from PIL import Image, UnidentifiedImageError
@@ -14,6 +15,8 @@ MAX_IMAGE_COUNT = 20
 MAX_IMAGE_WIDTH = 16_384
 MAX_IMAGE_HEIGHT = 16_384
 MAX_ALLOWED_IMAGE_PIXELS = 40_000_000
+MAX_FINAL_IMAGE_PIXELS = 80_000_000
+MAX_STAGED_OUTPUT_BYTES = 200 * 1024 * 1024
 
 
 class PromptCardValidationError(ValueError):
@@ -39,12 +42,44 @@ class UploadSelection:
 
 
 ImageSelection = ExistingSelection | UploadSelection
+ImageSource = IncomingImage | Path
 
 
 @dataclass(frozen=True)
 class PreparedImages:
     extension: str
-    contents: tuple[bytes, ...]
+    sources: tuple[ImageSource, ...]
+
+    @property
+    def image_count(self) -> int:
+        return len(self.sources)
+
+
+class _OutputBudget:
+    def __init__(self, maximum: int) -> None:
+        self.maximum = maximum
+        self.used = 0
+
+    def consume(self, size: int) -> None:
+        if self.used + size > self.maximum:
+            raise PromptCardValidationError(
+                "total_output_too_large",
+                "最终图片暂存总量不能超过 200 MB",
+            )
+        self.used += size
+
+
+class _BudgetedWriter:
+    def __init__(self, output: BinaryIO, budget: _OutputBudget) -> None:
+        self._output = output
+        self._budget = budget
+
+    def write(self, data: bytes) -> int:
+        self._budget.consume(len(data))
+        return self._output.write(data)
+
+    def __getattr__(self, name: str):
+        return getattr(self._output, name)
 
 
 def _validate_image_dimensions(image: Image.Image) -> None:
@@ -89,12 +124,19 @@ def parse_image_manifest(raw: str) -> tuple[ImageSelection, ...]:
     return tuple(selections)
 
 
-def _detect_format(content: bytes) -> str:
+def _open_image(source: ImageSource) -> Image.Image:
+    if isinstance(source, Path):
+        return Image.open(source)
+    return Image.open(BytesIO(source.content))
+
+
+def _detect_format(source: ImageSource) -> tuple[str, int]:
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(BytesIO(content)) as image:
+            with _open_image(source) as image:
                 _validate_image_dimensions(image)
+                pixels = image.width * image.height
                 image.verify()
                 format_name = image.format
     except PromptCardValidationError:
@@ -111,19 +153,22 @@ def _detect_format(content: bytes) -> str:
         ) from error
     if format_name not in {"JPEG", "PNG"}:
         raise PromptCardValidationError("invalid_image", "仅支持 JPG 和 PNG 图片")
-    return format_name
+    return format_name, pixels
 
 
-def _encode_png(content: bytes) -> bytes:
+def _write_png(
+    source: ImageSource,
+    destination: Path,
+    budget: _OutputBudget,
+) -> None:
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(BytesIO(content)) as image:
+            with _open_image(source) as image:
                 _validate_image_dimensions(image)
                 image.load()
-                output = BytesIO()
-                image.save(output, format="PNG")
-                return output.getvalue()
+                with destination.open("wb") as output:
+                    image.save(_BudgetedWriter(output, budget), format="PNG")
     except PromptCardValidationError:
         raise
     except (
@@ -136,9 +181,55 @@ def _encode_png(content: bytes) -> bytes:
         raise PromptCardValidationError("invalid_image", "图片转换失败") from error
 
 
+def _write_original(
+    source: ImageSource,
+    destination: Path,
+    budget: _OutputBudget,
+) -> None:
+    try:
+        with destination.open("wb") as output:
+            writer = _BudgetedWriter(output, budget)
+            if isinstance(source, IncomingImage):
+                writer.write(source.content)
+                return
+            with source.open("rb") as existing:
+                while chunk := existing.read(1024 * 1024):
+                    writer.write(chunk)
+    except PromptCardValidationError:
+        raise
+    except OSError as error:
+        raise PromptCardValidationError("invalid_image", "图片暂存失败") from error
+
+
+def stage_prepared_images(
+    prepared: PreparedImages,
+    directory: Path,
+    prefix: str,
+) -> list[Path]:
+    directory.mkdir(parents=True, exist_ok=True)
+    budget = _OutputBudget(MAX_STAGED_OUTPUT_BYTES)
+    paths: list[Path] = []
+    try:
+        for index, source in enumerate(prepared.sources, start=1):
+            path = directory / f"{prefix}-{index:02d}{prepared.extension}"
+            paths.append(path)
+            if prepared.extension == ".png":
+                _write_png(source, path, budget)
+            else:
+                _write_original(source, path, budget)
+        return paths
+    except Exception:
+        for path in paths:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
+
+
 def prepare_final_images(
     selections: Sequence[ImageSelection],
-    existing_images: Mapping[int, bytes],
+    existing_images: Mapping[int, Path],
     uploads: Sequence[IncomingImage],
 ) -> PreparedImages:
     if not selections:
@@ -158,19 +249,28 @@ def prepare_final_images(
     if referenced_uploads != set(range(len(uploads))):
         raise PromptCardValidationError("invalid_manifest", "上传图片清单与文件不一致")
 
-    contents: list[bytes] = []
+    sources: list[ImageSource] = []
     for selection in selections:
         if isinstance(selection, ExistingSelection):
-            content = existing_images.get(selection.image_index)
-            if content is None:
+            source = existing_images.get(selection.image_index)
+            if source is None:
                 raise PromptCardValidationError("invalid_manifest", "原图片引用不存在")
         else:
             if selection.file_index >= len(uploads):
                 raise PromptCardValidationError("invalid_manifest", "上传图片引用不存在")
-            content = uploads[selection.file_index].content
-        contents.append(content)
+            source = uploads[selection.file_index]
+        sources.append(source)
 
-    formats = [_detect_format(content) for content in contents]
-    if "PNG" in formats:
-        return PreparedImages(".png", tuple(_encode_png(content) for content in contents))
-    return PreparedImages(".jpg", tuple(contents))
+    formats: set[str] = set()
+    total_pixels = 0
+    for source in sources:
+        format_name, pixels = _detect_format(source)
+        formats.add(format_name)
+        total_pixels += pixels
+        if total_pixels > MAX_FINAL_IMAGE_PIXELS:
+            raise PromptCardValidationError(
+                "total_pixels_too_large",
+                "最终图片总像素不能超过 8000 万",
+            )
+    extension = ".png" if "PNG" in formats else ".jpg"
+    return PreparedImages(extension, tuple(sources))
