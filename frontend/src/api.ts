@@ -31,6 +31,17 @@ export type PromptCardListResponse = {
   items: PromptCard[];
 };
 
+export type PromptImageManifestItem =
+  | { kind: "existing"; image_index: number }
+  | { kind: "upload"; file_index: number };
+
+export type PromptCardMutationRequest = {
+  title: string;
+  prompt_text: string;
+  image_manifest: PromptImageManifestItem[];
+  new_images: File[];
+};
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -39,7 +50,16 @@ export class ApiError extends Error {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    throw new ApiError(response.status, `Request failed with status ${response.status}`);
+    let message = `请求失败（${response.status}）`;
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === "string" && payload.detail.trim()) {
+        message = payload.detail;
+      }
+    } catch {
+      // 非 JSON 错误响应使用稳定的状态码文案。
+    }
+    throw new ApiError(response.status, message);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -71,6 +91,55 @@ export async function getPromptCards(token: string): Promise<PromptCard[]> {
   });
   const result = await parseResponse<PromptCardListResponse>(response);
   return result.items;
+}
+
+function promptCardFormData(request: PromptCardMutationRequest): FormData {
+  const body = new FormData();
+  body.set("title", request.title);
+  body.set("prompt_text", request.prompt_text);
+  body.set("image_manifest", JSON.stringify(request.image_manifest));
+  request.new_images.forEach((file) => body.append("new_images", file));
+  return body;
+}
+
+async function mutatePromptCard(
+  token: string,
+  url: string,
+  method: "POST" | "PUT",
+  request: PromptCardMutationRequest,
+): Promise<PromptCard> {
+  const response = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    body: promptCardFormData(request),
+  });
+  return parseResponse<PromptCard>(response);
+}
+
+export function createPromptCard(
+  token: string,
+  request: PromptCardMutationRequest,
+): Promise<PromptCard> {
+  return mutatePromptCard(token, "/api/prompt-cards", "POST", request);
+}
+
+export function updatePromptCard(
+  token: string,
+  cardId: number,
+  request: PromptCardMutationRequest,
+): Promise<PromptCard> {
+  return mutatePromptCard(token, `/api/prompt-cards/${cardId}`, "PUT", request);
+}
+
+export async function deletePromptCard(
+  token: string,
+  cardId: number,
+): Promise<void> {
+  const response = await fetch(`/api/prompt-cards/${cardId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  await parseResponse<void>(response);
 }
 
 export async function getCategories(token: string): Promise<Category[]> {
