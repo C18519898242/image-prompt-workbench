@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app.auth import AuthState
 from app.config import Settings, get_settings
 from app.gemini_image_generator import generate_image
+from app.prompt_card_request_guard import PromptCardRequestGuard
 from app.routes.auth import router as auth_router
 from app.routes.generation_history import router as generation_history_router
 from app.routes.generations import router as generations_router
@@ -36,6 +37,7 @@ def configure_generation_logging(log_path: Path) -> None:
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved_settings = settings or get_settings()
     application = FastAPI(title="Image Prompt Workbench API")
+    application.add_middleware(PromptCardRequestGuard)
     application.state.settings = resolved_settings
     application.state.auth_state = AuthState(resolved_settings.auth_password_hash)
     application.state.image_generator = generate_image

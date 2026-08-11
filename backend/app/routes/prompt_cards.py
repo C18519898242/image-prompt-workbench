@@ -7,15 +7,16 @@ from pathlib import Path
 from fastapi import (
     APIRouter,
     Depends,
-    File,
-    Form,
     HTTPException,
     Request,
-    UploadFile,
     status,
 )
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from python_multipart.exceptions import MultipartParseError
+from starlette.datastructures import FormData, UploadFile
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.formparsers import MultiPartException
 
 from app.prompt_card_images import (
     build_public_image_refs,
@@ -27,7 +28,9 @@ from app.prompt_card_repository import (
     PromptCardInUseError,
     PromptCardRepository,
 )
+from app.prompt_card_request_guard import PromptCardRequestTooLarge
 from app.prompt_card_uploads import (
+    ImageSelection,
     MAX_IMAGE_BYTES,
     MAX_TOTAL_UPLOAD_BYTES,
     IncomingImage,
@@ -79,6 +82,10 @@ ERROR_STATUS = {
     "image_too_large": status.HTTP_413_CONTENT_TOO_LARGE,
     "total_too_large": status.HTTP_413_CONTENT_TOO_LARGE,
 }
+MAX_FORM_FIELDS = 3
+MAX_NEW_IMAGE_FILES = 20
+MAX_FORM_PART_BYTES = 64 * 1024
+FORM_FIELDS = {"title", "prompt_text", "image_manifest", "new_images"}
 
 
 def _validation_http_error(error: PromptCardValidationError) -> HTTPException:
@@ -108,6 +115,58 @@ async def _read_new_images(files: list[UploadFile]) -> tuple[IncomingImage, ...]
     return tuple(result)
 
 
+def _single_text_field(form: FormData, name: str) -> str:
+    values = form.getlist(name)
+    if len(values) != 1 or not isinstance(values[0], str):
+        raise PromptCardValidationError("invalid_form", "表单数据无效")
+    return values[0]
+
+
+async def _parse_prompt_card_form(
+    request: Request,
+) -> tuple[str, str, tuple[ImageSelection, ...], tuple[IncomingImage, ...]]:
+    form: FormData | None = None
+    try:
+        form = await request.form(
+            max_files=MAX_NEW_IMAGE_FILES,
+            max_fields=MAX_FORM_FIELDS,
+            max_part_size=MAX_FORM_PART_BYTES,
+        )
+        if any(name not in FORM_FIELDS for name in form):
+            raise PromptCardValidationError("invalid_form", "表单数据无效")
+        title = _single_text_field(form, "title")
+        prompt_text = _single_text_field(form, "prompt_text")
+        image_manifest = _single_text_field(form, "image_manifest")
+        image_values = form.getlist("new_images")
+        if any(not isinstance(value, UploadFile) for value in image_values):
+            raise PromptCardValidationError("invalid_form", "表单数据无效")
+        image_files = [
+            value for value in image_values if isinstance(value, UploadFile)
+        ]
+        selections = parse_image_manifest(image_manifest)
+        uploads = await _read_new_images(image_files)
+        return title, prompt_text, selections, uploads
+    except PromptCardRequestTooLarge:
+        raise
+    except PromptCardValidationError:
+        raise
+    except StarletteHTTPException as error:
+        if error.status_code == status.HTTP_400_BAD_REQUEST:
+            raise PromptCardValidationError(
+                "invalid_form",
+                "表单数据无效",
+            ) from error
+        raise
+    except (MultiPartException, MultipartParseError) as error:
+        raise PromptCardValidationError(
+            "invalid_form",
+            "表单数据无效",
+        ) from error
+    finally:
+        if form is not None:
+            await form.close()
+
+
 def _category_map(repository: PromptCardRepository) -> dict[int, CategoryItem]:
     return {
         item.id: CategoryItem(
@@ -126,21 +185,13 @@ def _category_map(repository: PromptCardRepository) -> dict[int, CategoryItem]:
 )
 async def create_prompt_card(
     request: Request,
-    title: str = Form(...),
-    prompt_text: str = Form(...),
-    image_manifest: str = Form(...),
-    new_images: list[UploadFile] = File(default=[]),
     _: str = Depends(require_token),
 ) -> PromptCardItem:
+    connection: sqlite3.Connection | None = None
     try:
-        selections = parse_image_manifest(image_manifest)
-        uploads = await _read_new_images(new_images)
-    except PromptCardValidationError as error:
-        raise _validation_http_error(error) from error
-
-    settings = request.app.state.settings
-    connection = sqlite3.connect(settings.database_path)
-    try:
+        title, prompt_text, selections, uploads = await _parse_prompt_card_form(request)
+        settings = request.app.state.settings
+        connection = sqlite3.connect(settings.database_path)
         repository = PromptCardRepository(connection)
         service = PromptCardWriteService(
             repository,
@@ -153,34 +204,29 @@ async def create_prompt_card(
             uploads=uploads,
         )
         return _to_prompt_card_item(card, category_map=_category_map(repository))
+    except PromptCardRequestTooLarge:
+        raise
     except PromptCardValidationError as error:
         raise _validation_http_error(error) from error
     except Exception as error:
         logging.getLogger("app.prompt_cards").exception("创建提示词失败")
         raise HTTPException(status_code=500, detail="保存提示词失败") from error
     finally:
-        connection.close()
+        if connection is not None:
+            connection.close()
 
 
 @router.put("/prompt-cards/{card_id}", response_model=PromptCardItem)
 async def update_prompt_card(
     card_id: int,
     request: Request,
-    title: str = Form(...),
-    prompt_text: str = Form(...),
-    image_manifest: str = Form(...),
-    new_images: list[UploadFile] = File(default=[]),
     _: str = Depends(require_token),
 ) -> PromptCardItem:
+    connection: sqlite3.Connection | None = None
     try:
-        selections = parse_image_manifest(image_manifest)
-        uploads = await _read_new_images(new_images)
-    except PromptCardValidationError as error:
-        raise _validation_http_error(error) from error
-
-    settings = request.app.state.settings
-    connection = sqlite3.connect(settings.database_path)
-    try:
+        title, prompt_text, selections, uploads = await _parse_prompt_card_form(request)
+        settings = request.app.state.settings
+        connection = sqlite3.connect(settings.database_path)
         repository = PromptCardRepository(connection)
         service = PromptCardWriteService(
             repository,
@@ -194,6 +240,8 @@ async def update_prompt_card(
             uploads=uploads,
         )
         return _to_prompt_card_item(card, category_map=_category_map(repository))
+    except PromptCardRequestTooLarge:
+        raise
     except PromptCardNotFoundError as error:
         raise HTTPException(status_code=404, detail="提示词卡片不存在") from error
     except PromptCardValidationError as error:
@@ -202,7 +250,8 @@ async def update_prompt_card(
         logging.getLogger("app.prompt_cards").exception("编辑提示词失败")
         raise HTTPException(status_code=500, detail="保存提示词失败") from error
     finally:
-        connection.close()
+        if connection is not None:
+            connection.close()
 
 
 @router.delete(
@@ -214,9 +263,10 @@ def delete_prompt_card_route(
     request: Request,
     _: str = Depends(require_token),
 ) -> None:
-    settings = request.app.state.settings
-    connection = sqlite3.connect(settings.database_path)
+    connection: sqlite3.Connection | None = None
     try:
+        settings = request.app.state.settings
+        connection = sqlite3.connect(settings.database_path)
         repository = PromptCardRepository(connection)
         service = PromptCardWriteService(
             repository,
@@ -234,7 +284,8 @@ def delete_prompt_card_route(
         logging.getLogger("app.prompt_cards").exception("删除提示词失败")
         raise HTTPException(status_code=500, detail="删除提示词失败") from error
     finally:
-        connection.close()
+        if connection is not None:
+            connection.close()
 
 
 @router.get("/categories", response_model=CategoryListResponse)
