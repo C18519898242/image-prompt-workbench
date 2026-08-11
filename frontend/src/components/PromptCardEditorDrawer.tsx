@@ -41,6 +41,23 @@ type FieldErrors = {
   images?: string;
 };
 
+const FOCUSABLE_SELECTOR = "button, input, textarea, [tabindex]";
+
+function focusableDialogElements(dialog: HTMLElement): HTMLElement[] {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter((element) => {
+      const style = window.getComputedStyle(element);
+      const disabled = "disabled" in element && Boolean(element.disabled);
+      return !disabled
+        && !element.hidden
+        && element.getAttribute("aria-hidden") !== "true"
+        && element.getAttribute("aria-disabled") !== "true"
+        && element.tabIndex >= 0
+        && style.display !== "none"
+        && style.visibility !== "hidden";
+    });
+}
+
 function editorSnapshot(
   title: string,
   promptText: string,
@@ -70,8 +87,10 @@ export function PromptCardEditorDrawer({
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const dialogRef = useRef<HTMLElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const draggedIndexRef = useRef<number | null>(null);
+  const mountedRef = useRef(false);
   const uploadUrlsRef = useRef(new Set<string>());
   const initialSnapshotRef = useRef(
     editorSnapshot(initialTitle, initialPromptText, initialImages),
@@ -100,7 +119,13 @@ export function PromptCardEditorDrawer({
     titleInputRef.current?.focus();
   }, []);
 
-  useEffect(() => revokeAllUploadUrls, [revokeAllUploadUrls]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      revokeAllUploadUrls();
+    };
+  }, [revokeAllUploadUrls]);
 
   const requestClose = useCallback(() => {
     if (saving) return;
@@ -110,9 +135,36 @@ export function PromptCardEditorDrawer({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusableElements = focusableDialogElements(dialogRef.current);
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements.at(-1);
+      if (!firstElement || !lastElement) {
+        event.preventDefault();
+        dialogRef.current.focus();
+        return;
+      }
+
+      const activeElement = document.activeElement;
+      if (event.shiftKey) {
+        if (activeElement !== firstElement && dialogRef.current.contains(activeElement)) {
+          return;
+        }
+        event.preventDefault();
+        lastElement.focus();
+        return;
+      }
+      if (activeElement !== lastElement && dialogRef.current.contains(activeElement)) {
+        return;
+      }
       event.preventDefault();
-      requestClose();
+      firstElement.focus();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -205,27 +257,29 @@ export function PromptCardEditorDrawer({
     setOperationError(null);
     const request = buildPromptCardMutation(title, promptText, images);
 
-    let saved: PromptCard;
     try {
-      saved = mode === "create"
+      const saved = mode === "create"
         ? await createPromptCard(token, request)
         : await updatePromptCard(token, card!.id, request);
+      if (!mountedRef.current) return;
+      revokeAllUploadUrls();
+      onSaved(saved);
     } catch (error) {
+      if (!mountedRef.current) return;
       if (error instanceof ApiError && error.status === 401) {
         clearToken(token);
+        if (!mountedRef.current) return;
       }
       setOperationError(
         error instanceof ApiError
           ? error.message
           : "保存提示词失败，请稍后重试",
       );
-      setSaving(false);
-      return;
+    } finally {
+      if (mountedRef.current) {
+        setSaving(false);
+      }
     }
-
-    revokeAllUploadUrls();
-    setSaving(false);
-    onSaved(saved);
   };
 
   const heading = mode === "create" ? "新增提示词" : "编辑提示词";
@@ -238,10 +292,12 @@ export function PromptCardEditorDrawer({
       onClick={handleBackdropClick}
     >
       <aside
+        ref={dialogRef}
         className="prompt-editor-drawer"
         role="dialog"
         aria-modal="true"
         aria-labelledby="prompt-editor-heading"
+        tabIndex={-1}
       >
         <header className="prompt-editor-header">
           <h2 id="prompt-editor-heading">{heading}</h2>

@@ -949,6 +949,12 @@ select:focus-visible {
   width: fit-content;
 }
 
+.prompt-editor-upload:focus-within {
+  outline: 2px solid rgb(17 24 39 / 45%);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgb(17 24 39 / 10%);
+}
+
 .prompt-editor-upload input {
   position: absolute;
   width: 1px;

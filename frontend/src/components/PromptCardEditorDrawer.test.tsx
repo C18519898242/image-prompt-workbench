@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
@@ -70,6 +70,7 @@ function renderDrawer(options: {
   const onClose = options.onClose ?? vi.fn();
   const view = render(
     <AuthProvider>
+      <button type="button">抽屉前背景按钮</button>
       <PromptCardEditorDrawer
         token="token"
         mode={options.mode}
@@ -77,6 +78,7 @@ function renderDrawer(options: {
         onSaved={onSaved}
         onClose={onClose}
       />
+      <button type="button">抽屉后背景按钮</button>
     </AuthProvider>,
   );
   return { ...view, onSaved, onClose };
@@ -89,6 +91,38 @@ async function fillCreateForm(user: ReturnType<typeof userEvent.setup>) {
     screen.getByLabelText("上传示例图"),
     new File(["image"], "one.jpg", { type: "image/jpeg" }),
   );
+}
+
+function DeferredDrawer({
+  visible,
+  onSaved,
+}: {
+  visible: boolean;
+  onSaved: (card: PromptCard) => void;
+}) {
+  return (
+    <AuthProvider>
+      {visible && (
+        <PromptCardEditorDrawer
+          token="token"
+          mode="edit"
+          card={editableCard}
+          onSaved={onSaved}
+          onClose={vi.fn()}
+        />
+      )}
+    </AuthProvider>
+  );
+}
+
+function deferredResponse() {
+  let resolve!: (response: Response) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<Response>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 test("新增抽屉要求标题、提示词和至少一张图片", async () => {
@@ -162,6 +196,59 @@ test("打开抽屉后聚焦标题输入框", () => {
 
   expect(screen.getByRole("dialog", { name: "新增提示词" })).toBeInTheDocument();
   expect(screen.getByLabelText("标题")).toHaveFocus();
+});
+
+test("Tab 和 Shift+Tab 在抽屉首尾可聚焦控件间循环", async () => {
+  const user = userEvent.setup();
+  renderDrawer({ mode: "create", card: null });
+  const closeButton = screen.getByRole("button", { name: "关闭" });
+  const saveButton = screen.getByRole("button", { name: "保存提示词" });
+
+  saveButton.focus();
+  await user.tab();
+  expect(closeButton).toHaveFocus();
+  expect(screen.getByRole("button", { name: "抽屉后背景按钮" })).not.toHaveFocus();
+
+  closeButton.focus();
+  await user.tab({ shift: true });
+  expect(saveButton).toHaveFocus();
+  expect(screen.getByRole("button", { name: "抽屉前背景按钮" })).not.toHaveFocus();
+});
+
+test("上传输入可通过标签访问且 Tab 跳过禁用的图片排序按钮", async () => {
+  const user = userEvent.setup();
+  renderDrawer({ mode: "create", card: null });
+  const uploadInput = screen.getByLabelText("上传示例图");
+  expect(uploadInput).toHaveAttribute("type", "file");
+  await user.upload(
+    uploadInput,
+    new File(["image"], "one.jpg", { type: "image/jpeg" }),
+  );
+
+  uploadInput.focus();
+  await user.tab();
+
+  expect(screen.getByRole("button", { name: "图片 1 前移" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "图片 1 后移" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "图片 1 移除" })).toHaveFocus();
+});
+
+test("保存期间 Tab 不进入禁用控件或背景区域", async () => {
+  const deferred = deferredResponse();
+  vi.stubGlobal("fetch", vi.fn().mockReturnValue(deferred.promise));
+  const user = userEvent.setup();
+  renderDrawer({ mode: "edit", card: editableCard });
+  const dialog = screen.getByRole("dialog", { name: "编辑提示词" });
+
+  await user.click(screen.getByRole("button", { name: "保存提示词" }));
+  expect(screen.getByRole("button", { name: "关闭" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "保存中…" })).toBeDisabled();
+  await user.tab();
+
+  expect(dialog).toHaveFocus();
+  expect(screen.getByRole("button", { name: "抽屉前背景按钮" })).not.toHaveFocus();
+  expect(screen.getByRole("button", { name: "抽屉后背景按钮" })).not.toHaveFocus();
+  deferred.resolve(new Response(JSON.stringify(savedCard), { status: 200 }));
 });
 
 test("多选图片按选择顺序追加", async () => {
@@ -346,6 +433,70 @@ test("保存失败后保留文字和图片", async () => {
   expect(screen.getByLabelText("提示词正文")).toHaveValue("保留提示词");
   expect(screen.getByText("one.jpg")).toBeInTheDocument();
   expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+});
+
+test("提交后卸载再成功响应不会调用过期 onSaved 或更新状态", async () => {
+  const deferred = deferredResponse();
+  vi.stubGlobal("fetch", vi.fn().mockReturnValue(deferred.promise));
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  const onSaved = vi.fn();
+  const user = userEvent.setup();
+  const view = render(<DeferredDrawer visible onSaved={onSaved} />);
+  await user.click(screen.getByRole("button", { name: "保存提示词" }));
+
+  view.rerender(<DeferredDrawer visible={false} onSaved={onSaved} />);
+  await act(async () => {
+    deferred.resolve(new Response(JSON.stringify(savedCard), { status: 200 }));
+    await deferred.promise;
+    await Promise.resolve();
+  });
+
+  expect(onSaved).not.toHaveBeenCalled();
+  expect(consoleError).not.toHaveBeenCalled();
+});
+
+test("提交后卸载再拒绝响应不会更新已卸载组件", async () => {
+  const deferred = deferredResponse();
+  vi.stubGlobal("fetch", vi.fn().mockReturnValue(deferred.promise));
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  const onSaved = vi.fn();
+  const user = userEvent.setup();
+  const view = render(<DeferredDrawer visible onSaved={onSaved} />);
+  await user.click(screen.getByRole("button", { name: "保存提示词" }));
+
+  view.rerender(<DeferredDrawer visible={false} onSaved={onSaved} />);
+  await act(async () => {
+    deferred.reject(new Error("network"));
+    await deferred.promise.catch(() => undefined);
+    await Promise.resolve();
+  });
+
+  expect(onSaved).not.toHaveBeenCalled();
+  expect(consoleError).not.toHaveBeenCalled();
+});
+
+test("提交后卸载再收到 401 不执行过期 clearToken 路径", async () => {
+  sessionStorage.setItem("ipw.auth.token", "token");
+  const deferred = deferredResponse();
+  vi.stubGlobal("fetch", vi.fn().mockReturnValue(deferred.promise));
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  const onSaved = vi.fn();
+  const user = userEvent.setup();
+  const view = render(<DeferredDrawer visible onSaved={onSaved} />);
+  await user.click(screen.getByRole("button", { name: "保存提示词" }));
+
+  view.rerender(<DeferredDrawer visible={false} onSaved={onSaved} />);
+  await act(async () => {
+    deferred.resolve(
+      new Response(JSON.stringify({ detail: "登录已过期" }), { status: 401 }),
+    );
+    await deferred.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(sessionStorage.getItem("ipw.auth.token")).toBe("token");
+  expect(onSaved).not.toHaveBeenCalled();
+  expect(consoleError).not.toHaveBeenCalled();
 });
 
 test("未知保存错误显示稳定文案", async () => {
