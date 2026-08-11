@@ -72,6 +72,7 @@ class PromptCardRequestGuard:
             return
 
         received = 0
+        response_started = False
 
         async def limited_receive() -> Message:
             nonlocal received
@@ -82,7 +83,15 @@ class PromptCardRequestGuard:
                     raise PromptCardRequestTooLarge
             return message
 
+        async def tracked_send(message: Message) -> None:
+            nonlocal response_started
+            await send(message)
+            if message["type"] == "http.response.start":
+                response_started = True
+
         try:
-            await self.app(scope, limited_receive, send)
+            await self.app(scope, limited_receive, tracked_send)
         except PromptCardRequestTooLarge:
+            if response_started:
+                raise
             await self._send_too_large(scope, receive, send)
