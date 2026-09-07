@@ -8,7 +8,7 @@ import pytest
 
 from app.auth import hash_password
 from app.config import Settings
-from app.gemini_image_generator import GeneratedImage, GeminiImageError
+from app.image_generation_types import GeneratedImage, ImageGenerationError
 from app.main import create_app
 from app.prompt_card_repository import PromptCardRepository
 
@@ -47,6 +47,7 @@ def generation_client(password: str, tmp_path: Path) -> TestClient:
         database_path=database_path,
         image_directory=image_directory,
         gemini_api_key="secret",
+        grok_api_key="grok-secret",
     )
     return TestClient(create_app(settings))
 
@@ -65,6 +66,7 @@ def test_create_generation_writes_image_and_history(generation_client, password,
         return GeneratedImage(png_bytes, "image/png")
 
     generation_client.app.state.image_generator = fake_generator
+    generation_client.app.state.gemini_image_generator = fake_generator
     token = login(generation_client, password)
     response = generation_client.post(
         "/api/generations",
@@ -112,6 +114,87 @@ def generation_form(prompt_card_id: str = "1") -> dict[str, str]:
         "resolution": "1K",
         "thinking_level": "minimal",
     }
+
+
+def test_create_grok_generation_uses_grok_generator(
+    generation_client, password, png_bytes
+) -> None:
+    captured = {}
+
+    def fake_grok_generator(**kwargs):
+        captured.update(kwargs)
+        return GeneratedImage(png_bytes, "image/png")
+
+    generation_client.app.state.image_generator = fake_grok_generator
+    generation_client.app.state.grok_image_generator = fake_grok_generator
+    token = login(generation_client, password)
+    response = generation_client.post(
+        "/api/generations",
+        headers={"Authorization": f"Bearer {token}"},
+        data={
+            "prompt_card_id": "1",
+            "prompt": "生成竖版人物",
+            "model": "Grok Imagine",
+            "aspect_ratio": "9:16",
+            "resolution": "1K",
+            "thinking_level": "minimal",
+        },
+        files=[
+            ("reference_images", ("ref.png", png_bytes, "image/png")),
+        ],
+    )
+
+    assert response.status_code == 201
+    assert response.json()["model"] == "Grok Imagine"
+    assert captured["api_key"] == "grok-secret"
+    assert captured["base_url"] == "https://grok-api.xyz365.tech/v1"
+    assert captured["model"] == "grok-4.5"
+    assert captured["prompt"] == "生成竖版人物"
+    assert captured["aspect_ratio"] == "9:16"
+    assert "resolution" not in captured
+    assert "thinking_level" not in captured
+    assert captured["references"][0].mime_type == "image/png"
+
+
+def test_grok_generation_requires_grok_api_key(
+    generation_client, password, png_bytes
+) -> None:
+    generation_client.app.state.settings.grok_api_key = ""
+    generation_client.app.state.image_generator = lambda **kwargs: GeneratedImage(
+        png_bytes, "image/png"
+    )
+    token = login(generation_client, password)
+    form = generation_form()
+    form["model"] = "Grok Imagine"
+
+    response = generation_client.post(
+        "/api/generations",
+        headers={"Authorization": f"Bearer {token}"},
+        data=form,
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "尚未配置 GROK_API_KEY"
+
+
+def test_generation_rejects_unknown_model(
+    generation_client, password, png_bytes
+) -> None:
+    generation_client.app.state.image_generator = lambda **kwargs: GeneratedImage(
+        png_bytes, "image/png"
+    )
+    token = login(generation_client, password)
+    form = generation_form()
+    form["model"] = "Unknown"
+
+    response = generation_client.post(
+        "/api/generations",
+        headers={"Authorization": f"Bearer {token}"},
+        data=form,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "暂不支持该模型"
 
 
 def test_generation_requires_login(generation_client) -> None:
@@ -163,9 +246,10 @@ def test_generation_rejects_missing_prompt_card(
 
 def test_generation_failure_writes_log_without_history(generation_client, password):
     def failing_generator(**kwargs):
-        raise GeminiImageError("上游没有返回图片")
+        raise ImageGenerationError("上游没有返回图片")
 
     generation_client.app.state.image_generator = failing_generator
+    generation_client.app.state.gemini_image_generator = failing_generator
     token = login(generation_client, password)
     response = generation_client.post(
         "/api/generations",
