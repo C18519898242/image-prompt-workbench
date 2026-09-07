@@ -17,10 +17,12 @@ export type AspectRatio =
   | "8:1"
   | "1:8";
 
+export type GenerationModel = "Nano Banana 2" | "Grok Imagine";
+
 export type GenerationSubmission = {
   card: PromptCard;
   prompt: string;
-  model: "Nano Banana 2";
+  model: GenerationModel;
   aspectRatio: AspectRatio;
   resolution: "1K" | "2K";
   quantity: 1 | 2 | 4;

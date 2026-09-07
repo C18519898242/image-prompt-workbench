@@ -219,7 +219,7 @@ test("基础参数始终可见且受控", async () => {
   expect(screen.getByLabelText("分辨率")).toHaveValue("1K");
   expect(screen.getByLabelText("生成数量")).toHaveValue("1");
   expect(screen.getByLabelText("思考级别")).toHaveValue("minimal");
-  expect(optionValues("模型")).toEqual(["Nano Banana 2"]);
+  expect(optionValues("模型")).toEqual(["Nano Banana 2", "Grok Imagine"]);
   expect(optionValues("比例")).toEqual([
     "Auto",
     "1:1",
@@ -253,6 +253,48 @@ test("基础参数始终可见且受控", async () => {
   expect(screen.getByLabelText("分辨率")).toHaveValue("2K");
   expect(screen.getByLabelText("生成数量")).toHaveValue("4");
   expect(screen.getByLabelText("思考级别")).toHaveValue("high");
+});
+
+test("选择 Grok 后归一化并禁用不适用参数", async () => {
+  const user = userEvent.setup();
+  const { onGenerate } = renderWorkspace();
+
+  await user.selectOptions(screen.getByLabelText("分辨率"), "2K");
+  await user.selectOptions(screen.getByLabelText("思考级别"), "high");
+  await user.selectOptions(screen.getByLabelText("模型"), "Grok Imagine");
+
+  expect(screen.getByLabelText("分辨率")).toBeDisabled();
+  expect(screen.getByLabelText("分辨率")).toHaveValue("1K");
+  expect(screen.getByLabelText("思考级别")).toBeDisabled();
+  expect(screen.getByLabelText("思考级别")).toHaveValue("minimal");
+  expect(screen.getAllByText("由 Grok 自动决定")).toHaveLength(2);
+  expect(screen.getByLabelText("比例")).toBeEnabled();
+  expect(screen.getByLabelText("生成数量")).toBeEnabled();
+  expect(screen.getByLabelText("上传生成参考图")).toBeEnabled();
+
+  await user.selectOptions(screen.getByLabelText("比例"), "9:16");
+  await user.click(screen.getByRole("button", { name: "开始生成" }));
+
+  expect(onGenerate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      model: "Grok Imagine",
+      aspectRatio: "9:16",
+      resolution: "1K",
+      thinkingLevel: "minimal",
+    }),
+  );
+});
+
+test("从 Grok 切回 Gemini 后恢复参数控件", async () => {
+  const user = userEvent.setup();
+  renderWorkspace();
+
+  await user.selectOptions(screen.getByLabelText("模型"), "Grok Imagine");
+  await user.selectOptions(screen.getByLabelText("模型"), "Nano Banana 2");
+
+  expect(screen.getByLabelText("分辨率")).toBeEnabled();
+  expect(screen.getByLabelText("思考级别")).toBeEnabled();
+  expect(screen.queryByText("由 Grok 自动决定")).not.toBeInTheDocument();
 });
 
 test("提交按钮位于参数面板内，且使用全宽主按钮样式", async () => {
