@@ -46,13 +46,28 @@ AUTH_PASSWORD_HASH='your-generated-argon2id-hash'
 GEMINI_API_KEY=
 GEMINI_BASE_URL=https://gemini.xyz365.tech/v1beta
 GEMINI_MODEL=gemini-3.1-flash-image
+GROK_API_KEY=
+GROK_BASE_URL=https://grok-api.xyz365.tech/v1
+GROK_MODEL=grok-4.5
 ```
 
 `AUTH_PASSWORD_HASH` 是登录鉴权必需的应用密钥。请使用密码管理器或其他安全随机工具生成强度足够且唯一的密码，不要重复使用短密码。生成的 hash 包含 `$` 字符，使用单引号包裹可以避免 Docker Compose 对其进行插值。CLI 会隐藏密码输入、要求二次确认、不接受命令行明文密码参数，也不会自动写入 `.env`。
 
 ### 图片生成配置
 
-执行「开始生成」时还需要配置 `GEMINI_API_KEY`（模型密钥，只在后端读取）。`GEMINI_BASE_URL` 与 `GEMINI_MODEL` 已有默认值，只有代理地址或模型变化时才需要覆盖。
+执行「开始生成」时需要配置所选模型对应的密钥，密钥只在后端读取：
+
+- `Nano Banana 2` 使用 `GEMINI_API_KEY`。`GEMINI_BASE_URL` 与 `GEMINI_MODEL` 已有默认值，只有代理地址或模型变化时才需要覆盖。
+- `Grok Imagine` 使用 `GROK_API_KEY`。`GROK_BASE_URL` 与 `GROK_MODEL` 同样提供默认值。
+
+#### Grok Imagine
+
+生成工作台选择「Grok Imagine」后，后端通过 Grok Responses API 的 `image_generation` 工具生成图片。支持文生图以及最多 8 张参考图。
+
+- 比例会作为明确约束加入提示词；选择 `Auto` 时不增加比例约束。
+- Grok 图片工具自动决定实际分辨率和思考过程，因此界面中的这两项会禁用。
+- `GROK_MODEL` 默认使用 `grok-4.5`，可通过环境变量切换兼容模型。
+- 目标网关可能有独立的上游超时限制，本项目内部重试无法绕过网关限制。
 
 生成行为说明：
 

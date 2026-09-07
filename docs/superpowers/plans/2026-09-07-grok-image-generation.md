@@ -1156,10 +1156,10 @@ npm run build
 Set-Location C:\src\image-prompt-workbench
 git diff --check
 git status --short
-git grep -n "g2a_"
+git grep -n -E "g2a_[A-Za-z0-9_]{20,}"
 ```
 
-预期：`git diff --check` 无输出；`.env` 不出现在状态中；`git grep -n "g2a_"` 无输出。
+预期：`git diff --check` 无输出；`.env` 不出现在状态中；真实密钥格式检查无输出。
 
 - [ ] **步骤 8：提交文档**
 
