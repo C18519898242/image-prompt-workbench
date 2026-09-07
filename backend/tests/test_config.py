@@ -17,3 +17,14 @@ def test_settings_requires_auth_password_hash(monkeypatch: pytest.MonkeyPatch) -
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_settings_has_grok_defaults() -> None:
+    settings = Settings(
+        auth_password_hash="hash",
+        _env_file=None,
+    )
+
+    assert settings.grok_api_key == ""
+    assert settings.grok_base_url == "https://grok-api.xyz365.tech/v1"
+    assert settings.grok_model == "grok-4.5"

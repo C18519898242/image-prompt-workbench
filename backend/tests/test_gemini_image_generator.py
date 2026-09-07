@@ -5,12 +5,11 @@ from PIL import Image
 import pytest
 
 from app.gemini_image_generator import (
-    GeneratedImage,
     GeminiImageError,
-    ReferenceImage,
     build_generation_request,
     extract_image,
 )
+from app.image_generation_types import GeneratedImage, ReferenceImage
 
 
 def png_bytes() -> bytes:
