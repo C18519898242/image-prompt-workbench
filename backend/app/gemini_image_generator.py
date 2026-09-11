@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import time
+from dataclasses import dataclass
 from typing import Any, Callable, TypeAlias
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -13,16 +14,10 @@ from urllib.request import Request, urlopen
 
 from PIL import Image, UnidentifiedImageError
 
-from app.image_generation_types import (
-    GeneratedImage,
-    ImageGenerationError,
-    ReferenceImage,
-)
-
 logger = logging.getLogger("app.generation")
 
 
-class GeminiImageError(ImageGenerationError):
+class GeminiImageError(RuntimeError):
     """Gemini 图片请求或响应无效。"""
 
 
@@ -30,6 +25,18 @@ class GeminiHttpError(GeminiImageError):
     def __init__(self, status: int, message: str) -> None:
         super().__init__(f"HTTP {status}: {message}")
         self.status = status
+
+
+@dataclass(frozen=True)
+class ReferenceImage:
+    mime_type: str
+    data: bytes
+
+
+@dataclass(frozen=True)
+class GeneratedImage:
+    data: bytes
+    mime_type: str
 
 
 Transport: TypeAlias = Callable[

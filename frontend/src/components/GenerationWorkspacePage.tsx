@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { PromptCard } from "../api";
-import type {
-  AspectRatio,
-  GenerationModel,
-  GenerationSubmission,
-} from "../generation";
+import type { AspectRatio, GenerationSubmission } from "../generation";
 import { ImageLightbox } from "./ImageLightbox";
 
 export type GenerationWorkspacePageProps = {
@@ -21,7 +17,7 @@ type ReferenceImage = {
 };
 
 type GenerationParams = {
-  model: GenerationModel;
+  model: "Nano Banana 2";
   aspectRatio: AspectRatio;
   resolution: "1K" | "2K";
   quantity: "1" | "2" | "4";
@@ -69,7 +65,6 @@ export function GenerationWorkspacePage({
   const [generationParams, setGenerationParams] = useState<GenerationParams>(
     initialGenerationParams,
   );
-  const isGrok = generationParams.model === "Grok Imagine";
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [failedExampleKeys, setFailedExampleKeys] = useState<
     Record<string, true>
@@ -344,19 +339,14 @@ export function GenerationWorkspacePage({
               模型
               <select
                 value={generationParams.model}
-                onChange={(event) => {
-                  const model = event.target.value as GenerationModel;
+                onChange={(event) =>
                   setGenerationParams((params) => ({
                     ...params,
-                    model,
-                    ...(model === "Grok Imagine"
-                      ? { resolution: "1K", thinkingLevel: "minimal" }
-                      : {}),
-                  }));
-                }}
+                    model: event.target.value as GenerationParams["model"],
+                  }))
+                }
               >
                 <option value="Nano Banana 2">Nano Banana 2</option>
-                <option value="Grok Imagine">Grok Imagine</option>
               </select>
             </label>
             <label>
@@ -380,9 +370,7 @@ export function GenerationWorkspacePage({
             <label>
               分辨率
               <select
-                aria-label="分辨率"
                 value={generationParams.resolution}
-                disabled={isGrok}
                 onChange={(event) =>
                   setGenerationParams((params) => ({
                     ...params,
@@ -394,11 +382,6 @@ export function GenerationWorkspacePage({
                 <option value="1K">1K</option>
                 <option value="2K">2K</option>
               </select>
-              {isGrok && (
-                <span className="generation-parameter-hint">
-                  由 Grok 自动决定
-                </span>
-              )}
             </label>
             <label>
               生成数量
@@ -420,9 +403,7 @@ export function GenerationWorkspacePage({
             <label>
               思考级别
               <select
-                aria-label="思考级别"
                 value={generationParams.thinkingLevel}
-                disabled={isGrok}
                 onChange={(event) =>
                   setGenerationParams((params) => ({
                     ...params,
@@ -434,11 +415,6 @@ export function GenerationWorkspacePage({
                 <option value="minimal">低</option>
                 <option value="high">高</option>
               </select>
-              {isGrok && (
-                <span className="generation-parameter-hint">
-                  由 Grok 自动决定
-                </span>
-              )}
             </label>
           </div>
           <button

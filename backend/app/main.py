@@ -7,8 +7,7 @@ from fastapi import FastAPI
 
 from app.auth import AuthState
 from app.config import Settings, get_settings
-from app.gemini_image_generator import generate_image as generate_gemini_image
-from app.grok_image_generator import generate_image as generate_grok_image
+from app.gemini_image_generator import generate_image
 from app.prompt_card_request_guard import PromptCardRequestGuard
 from app.routes.auth import router as auth_router
 from app.routes.generation_history import router as generation_history_router
@@ -41,8 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.add_middleware(PromptCardRequestGuard)
     application.state.settings = resolved_settings
     application.state.auth_state = AuthState(resolved_settings.auth_password_hash)
-    application.state.gemini_image_generator = generate_gemini_image
-    application.state.grok_image_generator = generate_grok_image
+    application.state.image_generator = generate_image
     data_root = Path(resolved_settings.database_path).parent
     application.state.generated_image_directory = data_root / "generated-images"
     application.state.generation_log_path = data_root / "logs" / "app.log"

@@ -13,9 +13,6 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_base_url: str = "https://gemini.xyz365.tech/v1beta"
     gemini_model: str = "gemini-3.1-flash-image"
-    grok_api_key: str = ""
-    grok_base_url: str = "https://grok-api.xyz365.tech/v1"
-    grok_model: str = "grok-4.5"
 
     model_config = SettingsConfigDict(
         env_file="../.env",

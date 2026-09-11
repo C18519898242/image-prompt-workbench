@@ -10,12 +10,8 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
+from app.gemini_image_generator import GeminiImageError, ReferenceImage
 from app.generation_history_repository import GenerationHistoryRepository
-from app.image_generation_types import (
-    GeneratedImage,
-    ImageGenerationError,
-    ReferenceImage,
-)
 from app.prompt_card_repository import PromptCardRepository
 from app.routes.auth import require_token
 from app.routes.generation_history import (
@@ -47,9 +43,6 @@ RESOLUTIONS = {"1K", "2K"}
 THINKING_LEVELS = {"minimal", "high"}
 REFERENCE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 OUTPUT_SUFFIXES = {"image/png": ".png", "image/jpeg": ".jpg"}
-GEMINI_DISPLAY_MODEL = "Nano Banana 2"
-GROK_DISPLAY_MODEL = "Grok Imagine"
-SUPPORTED_MODELS = {GEMINI_DISPLAY_MODEL, GROK_DISPLAY_MODEL}
 
 
 def read_references(uploads: list[UploadFile]) -> list[ReferenceImage]:
@@ -74,7 +67,7 @@ def write_generated_image(
 ) -> tuple[Path, str]:
     suffix = OUTPUT_SUFFIXES.get(mime_type)
     if suffix is None:
-        raise ImageGenerationError("图片生成服务返回了不支持的图片格式")
+        raise GeminiImageError("Gemini 返回了不支持的图片格式")
     generated_directory.mkdir(parents=True, exist_ok=True)
     filename = f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:12]}{suffix}"
     final_path = generated_directory / filename
@@ -109,12 +102,8 @@ def create_generation(
     _: str = Depends(require_token),
 ) -> GenerationHistoryItem:
     settings = request.app.state.settings
-    if model not in SUPPORTED_MODELS:
-        raise HTTPException(status_code=422, detail="暂不支持该模型")
-    if model == GEMINI_DISPLAY_MODEL and not settings.gemini_api_key:
+    if not settings.gemini_api_key:
         raise HTTPException(status_code=503, detail="尚未配置 GEMINI_API_KEY")
-    if model == GROK_DISPLAY_MODEL and not settings.grok_api_key:
-        raise HTTPException(status_code=503, detail="尚未配置 GROK_API_KEY")
     normalized_prompt = prompt.strip()
     if not normalized_prompt:
         raise HTTPException(status_code=422, detail="提示词不能为空")
@@ -134,34 +123,18 @@ def create_generation(
         connection.close()
 
     final_path: Path | None = None
-    actual_model = (
-        settings.gemini_model
-        if model == GEMINI_DISPLAY_MODEL
-        else settings.grok_model
-    )
     try:
-        # 长耗时模型调用期间不持有 SQLite 连接
-        generated: GeneratedImage
-        if model == GEMINI_DISPLAY_MODEL:
-            generated = request.app.state.gemini_image_generator(
-                api_key=settings.gemini_api_key,
-                base_url=settings.gemini_base_url,
-                model=actual_model,
-                prompt=normalized_prompt,
-                references=references,
-                aspect_ratio=aspect_ratio,
-                resolution=resolution,
-                thinking_level=thinking_level,
-            )
-        else:
-            generated = request.app.state.grok_image_generator(
-                api_key=settings.grok_api_key,
-                base_url=settings.grok_base_url,
-                model=actual_model,
-                prompt=normalized_prompt,
-                references=references,
-                aspect_ratio=aspect_ratio,
-            )
+        # 长耗时 Gemini 调用期间不持有 SQLite 连接
+        generated = request.app.state.image_generator(
+            api_key=settings.gemini_api_key,
+            base_url=settings.gemini_base_url,
+            model=settings.gemini_model,
+            prompt=normalized_prompt,
+            references=references,
+            aspect_ratio=aspect_ratio,
+            resolution=resolution,
+            thinking_level=thinking_level,
+        )
         final_path, image_path = write_generated_image(
             request.app.state.generated_image_directory,
             generated.data,
@@ -185,14 +158,14 @@ def create_generation(
             connection.close()
     except HTTPException:
         raise
-    except (ImageGenerationError, OSError, sqlite3.Error, RuntimeError) as error:
+    except (GeminiImageError, OSError, sqlite3.Error, RuntimeError) as error:
         if final_path is not None:
             final_path.unlink(missing_ok=True)
         logger.exception(
             "图片生成失败 prompt_card_id=%s model=%s aspect_ratio=%s "
             "resolution=%s thinking_level=%s error=%s",
             prompt_card_id,
-            actual_model,
+            settings.gemini_model,
             aspect_ratio,
             resolution,
             thinking_level,
