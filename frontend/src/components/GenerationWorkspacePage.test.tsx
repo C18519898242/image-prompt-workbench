@@ -216,9 +216,9 @@ test("基础参数始终可见且受控", async () => {
   expect(screen.getByLabelText("思考级别")).toBeInTheDocument();
   expect(screen.getByLabelText("模型")).toHaveValue("Nano Banana 2");
   expect(screen.getByLabelText("比例")).toHaveValue("Auto");
-  expect(screen.getByLabelText("分辨率")).toHaveValue("1K");
+  expect(screen.getByLabelText("分辨率")).toHaveValue("2K");
   expect(screen.getByLabelText("生成数量")).toHaveValue("1");
-  expect(screen.getByLabelText("思考级别")).toHaveValue("minimal");
+  expect(screen.getByLabelText("思考级别")).toHaveValue("high");
   expect(optionValues("模型")).toEqual(["Nano Banana 2"]);
   expect(optionValues("比例")).toEqual([
     "Auto",
