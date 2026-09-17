@@ -166,6 +166,9 @@ export function AppShell({ token }: AppShellProps) {
                 }
                 setView({ name: "workspace", card });
               }}
+              onViewHistory={(card) =>
+                setView({ name: "history", promptCardId: card.id })
+              }
             />
           )}
           {view.name === "workspace" && view.card && (

@@ -70,6 +70,7 @@ function renderLibrary(
         filters={filters}
         onFiltersChange={onFiltersChange}
         onUsePrompt={onUsePrompt}
+        onViewHistory={vi.fn()}
       />
     </AuthProvider>,
   );
@@ -270,18 +271,21 @@ test("卡片菜单打开后支持完整方向键、首尾键和 Escape 语义", 
   });
 
   await user.click(trigger);
+  const historyItem = screen.getByRole("menuitem", { name: "历史" });
   const editItem = screen.getByRole("menuitem", { name: "编辑" });
   const deleteItem = screen.getByRole("menuitem", { name: "删除" });
-  expect(editItem).toHaveFocus();
+  expect(historyItem).toHaveFocus();
 
+  await user.keyboard("{ArrowDown}");
+  expect(editItem).toHaveFocus();
   await user.keyboard("{ArrowDown}");
   expect(deleteItem).toHaveFocus();
   await user.keyboard("{ArrowDown}");
-  expect(editItem).toHaveFocus();
+  expect(historyItem).toHaveFocus();
   await user.keyboard("{ArrowUp}");
   expect(deleteItem).toHaveFocus();
   await user.keyboard("{Home}");
-  expect(editItem).toHaveFocus();
+  expect(historyItem).toHaveFocus();
   await user.keyboard("{End}");
   expect(deleteItem).toHaveFocus();
   await user.keyboard("{Escape}");
@@ -316,7 +320,7 @@ test("Shift+Tab 离开菜单时关闭菜单并回到触发按钮", async () => {
   });
 
   await user.click(trigger);
-  expect(screen.getByRole("menuitem", { name: "编辑" })).toHaveFocus();
+  expect(screen.getByRole("menuitem", { name: "历史" })).toHaveFocus();
   await user.tab({ shift: true });
 
   expect(screen.queryByRole("menu")).not.toBeInTheDocument();
@@ -340,7 +344,7 @@ test("点击另一张卡的菜单按钮时由新菜单项获得焦点", async ()
   expect(oldTrigger).toHaveAttribute("aria-expanded", "false");
   expect(newTrigger).toHaveAttribute("aria-expanded", "true");
   expect(screen.getAllByRole("menu")).toHaveLength(1);
-  expect(screen.getByRole("menuitem", { name: "编辑" })).toHaveFocus();
+  expect(screen.getByRole("menuitem", { name: "历史" })).toHaveFocus();
 });
 
 test("原图失败后保存有效新图会清除该卡片的占位状态", async () => {
@@ -535,6 +539,7 @@ test("按关键词过滤标题与提示词", async () => {
           filters={filters}
           onFiltersChange={setFilters}
           onUsePrompt={vi.fn()}
+          onViewHistory={vi.fn()}
         />
       </AuthProvider>
     );
@@ -615,6 +620,7 @@ test("分类筛选后的可见结果", async () => {
         filters={{ ...defaultLibraryFilters, categoryId: 1 }}
         onFiltersChange={vi.fn()}
         onUsePrompt={vi.fn()}
+        onViewHistory={vi.fn()}
       />
     </AuthProvider>,
   );

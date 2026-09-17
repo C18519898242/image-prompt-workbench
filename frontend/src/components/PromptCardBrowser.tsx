@@ -19,6 +19,9 @@ export function PromptCardBrowser({ token }: { token: string }) {
       onUsePrompt={() => {
         /* 旧入口无工作台跳转 */
       }}
+      onViewHistory={() => {
+        /* 旧入口无历史页跳转 */
+      }}
     />
   );
 }

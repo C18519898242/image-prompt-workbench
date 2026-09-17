@@ -14,6 +14,7 @@ type PromptCardCardProps = {
   imageFailed: boolean;
   onImageError: () => void;
   onUsePrompt: () => void;
+  onViewHistory: () => void;
   onEdit: () => void;
   onDelete: () => void;
   actionsDisabled?: boolean;
@@ -26,6 +27,7 @@ export function PromptCardCard({
   imageFailed,
   onImageError,
   onUsePrompt,
+  onViewHistory,
   onEdit,
   onDelete,
   actionsDisabled = false,
@@ -183,6 +185,13 @@ export function PromptCardCard({
                 onKeyDown={handleMenuKeyDown}
                 onBlur={handleMenuBlur}
               >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => runMenuAction(onViewHistory)}
+                >
+                  历史
+                </button>
                 <button
                   type="button"
                   role="menuitem"

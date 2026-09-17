@@ -30,6 +30,7 @@ type PromptLibraryPageProps = {
   filters: LibraryFilters;
   onFiltersChange: (filters: LibraryFilters) => void;
   onUsePrompt: (card: PromptCard) => void;
+  onViewHistory: (card: PromptCard) => void;
 };
 
 type EditorState =
@@ -71,6 +72,7 @@ export function PromptLibraryPage({
   filters,
   onFiltersChange,
   onUsePrompt,
+  onViewHistory,
 }: PromptLibraryPageProps) {
   const { clearToken } = useAuth();
   const [cards, setCards] = useState<PromptCard[]>([]);
@@ -281,6 +283,7 @@ export function PromptLibraryPage({
                 imageFailed={Boolean(failedImages[key])}
                 onImageError={() => markFailed(key)}
                 onUsePrompt={() => onUsePrompt(card)}
+                onViewHistory={() => onViewHistory(card)}
                 onEdit={() => {
                   setActionError(null);
                   setEditor({ mode: "edit", card });

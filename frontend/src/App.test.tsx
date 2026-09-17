@@ -204,6 +204,33 @@ test("top navigation jumps to generation history page", async () => {
   expect(await screen.findByText("暂无提示词卡片")).toBeInTheDocument();
 });
 
+test("从卡片菜单查看该提示词的生成历史", async () => {
+  const fetchMock = mockAuthedApis({
+    cards: async () => jsonResponse({ items: [workspaceCardFixture] }),
+  });
+  const user = userEvent.setup();
+  const password = crypto.randomUUID();
+
+  renderApp();
+  await user.type(screen.getByLabelText("密码"), password);
+  await user.click(screen.getByRole("button", { name: "登录" }));
+  await user.click(
+    await screen.findByRole("button", { name: "测试卡片的更多操作" }),
+  );
+  await user.click(screen.getByRole("menuitem", { name: "历史" }));
+
+  expect(
+    await screen.findByRole("navigation", { name: "面包屑" }),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText("提示词卡片筛选")).toHaveValue("9");
+  expect(
+    fetchMock.mock.calls.some(
+      ([input]) =>
+        String(input) === "/api/generation-history?prompt_card_id=9",
+    ),
+  ).toBe(true);
+});
+
 test("returns to login when the prompt cards API returns 401", async () => {
   mockAuthedApis({
     cards: jsonResponse({ detail: "Unauthorized" }, 401),

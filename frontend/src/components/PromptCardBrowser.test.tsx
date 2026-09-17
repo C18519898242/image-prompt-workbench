@@ -39,6 +39,7 @@ function renderBrowser() {
         filters={defaultLibraryFilters}
         onFiltersChange={vi.fn()}
         onUsePrompt={vi.fn()}
+        onViewHistory={vi.fn()}
       />
     </AuthProvider>,
   );
