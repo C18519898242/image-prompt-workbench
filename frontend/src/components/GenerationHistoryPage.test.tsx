@@ -348,6 +348,53 @@ test("loads history gallery and opens detail panel", async () => {
   expect(screen.queryByRole("dialog", { name: "大图预览" })).not.toBeInTheDocument();
 });
 
+test("history gallery only renders 16 images per page", async () => {
+  const histories = Array.from({ length: 17 }, (_, index) => ({
+    ...itemA,
+    id: index + 1,
+    title: `历史记录 ${index + 1} ${itemA.created_at + index}`,
+    image_path: `generated-images/${index + 1}.png`,
+    url: `/media/generated-images/${index + 1}.png`,
+    created_at: itemA.created_at + index,
+  }));
+  mockHistoryApis({ histories });
+  const user = userEvent.setup();
+
+  const { container } = renderHistory();
+
+  await screen.findByRole("navigation", { name: "历史分页" });
+  expect(container.querySelectorAll(".history-card-image")).toHaveLength(16);
+  expect(screen.getByText("第 1 / 2 页，共 17 条")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "查看 历史记录 1" })).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "下一页" }));
+
+  expect(container.querySelectorAll(".history-card-image")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "查看 历史记录 1" })).toBeInTheDocument();
+  expect(screen.getByText("第 2 / 2 页，共 17 条")).toBeInTheDocument();
+});
+
+test("changing a history filter returns pagination to the first page", async () => {
+  const histories = Array.from({ length: 17 }, (_, index) => ({
+    ...itemA,
+    id: index + 1,
+    title: `共同关键词 ${index + 1} ${itemA.created_at + index}`,
+    image_path: `generated-images/${index + 1}.png`,
+    url: `/media/generated-images/${index + 1}.png`,
+    created_at: itemA.created_at + index,
+  }));
+  mockHistoryApis({ histories });
+  const user = userEvent.setup();
+
+  renderHistory();
+  await user.click(await screen.findByRole("button", { name: "下一页" }));
+  expect(screen.getByText("第 2 / 2 页，共 17 条")).toBeInTheDocument();
+
+  await user.type(screen.getByRole("searchbox", { name: "搜索生成历史" }), "共同关键词");
+
+  expect(screen.getByText("第 1 / 2 页，共 17 条")).toBeInTheDocument();
+});
+
 test("filters gallery by search query", async () => {
   mockHistoryApis();
 

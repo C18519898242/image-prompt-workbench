@@ -1625,6 +1625,62 @@ select:focus-visible {
   gap: 0.85rem;
 }
 
+.history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1rem;
+}
+
+.history-pagination-pages {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.history-pagination-btn,
+.history-pagination-page {
+  appearance: none;
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.45rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.history-pagination-page {
+  min-width: 2rem;
+  padding-inline: 0.45rem;
+}
+
+.history-pagination-btn:hover:not(:disabled),
+.history-pagination-page:hover,
+.history-pagination-page.is-current {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.history-pagination-page.is-current {
+  font-weight: 700;
+}
+
+.history-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.history-pagination-summary {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .history-filter-card {
   max-width: 12rem;
 }
@@ -2001,5 +2057,11 @@ select:focus-visible {
 @media (max-width: 560px) {
   .history-grid {
     grid-template-columns: 1fr;
+  }
+
+  .history-pagination-summary {
+    width: 100%;
+    order: -1;
+    text-align: center;
   }
 }

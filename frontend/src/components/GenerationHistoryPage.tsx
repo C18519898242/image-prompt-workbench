@@ -12,6 +12,8 @@ import { useAuth } from "../auth/AuthContext";
 import type { SessionGenerationCard } from "../generation";
 import { ImageLightbox } from "./ImageLightbox";
 
+const HISTORY_PAGE_SIZE = 16;
+
 export type HistoryFilters = {
   query: string;
   timeRange: "all" | "today" | "week" | "month";
@@ -195,6 +197,7 @@ export function GenerationHistoryPage({
     ...defaultHistoryFilters,
     promptCardId: initialPromptCardId ?? null,
   }));
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -263,10 +266,28 @@ export function GenerationHistoryPage({
     [items, sessionCards],
   );
 
-  const visibleDisplayItems = useMemo(
+  const filteredDisplayItems = useMemo(
     () => filterHistoryDisplayItems(displayItems, filters),
     [displayItems, filters],
   );
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredDisplayItems.length / HISTORY_PAGE_SIZE),
+  );
+
+  const visibleDisplayItems = useMemo(() => {
+    const start = (currentPage - 1) * HISTORY_PAGE_SIZE;
+    return filteredDisplayItems.slice(start, start + HISTORY_PAGE_SIZE);
+  }, [currentPage, filteredDisplayItems]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   const visibleCompletedItems = useMemo(
     () =>
@@ -489,11 +510,12 @@ export function GenerationHistoryPage({
         <div className="history-gallery">
           {displayItems.length === 0 ? (
             <p className="prompt-card-status">暂无生成历史</p>
-          ) : visibleDisplayItems.length === 0 ? (
+          ) : filteredDisplayItems.length === 0 ? (
             <p className="prompt-card-status">没有符合条件的历史记录</p>
           ) : (
-            <div className="history-grid">
-              {visibleDisplayItems.map((entry) => {
+            <>
+              <div className="history-grid">
+                {visibleDisplayItems.map((entry) => {
                 if (entry.status === "loading" || entry.status === "failed") {
                   return (
                     <article
@@ -565,6 +587,8 @@ export function GenerationHistoryPage({
                             className="history-card-image"
                             src={history.url}
                             alt=""
+                            loading="lazy"
+                            decoding="async"
                             onError={() => markImageFailed(history.id)}
                           />
                         )}
@@ -592,8 +616,53 @@ export function GenerationHistoryPage({
                     </button>
                   </article>
                 );
-              })}
-            </div>
+                })}
+              </div>
+              {totalPages > 1 && (
+                <nav className="history-pagination" aria-label="历史分页">
+                  <button
+                    type="button"
+                    className="history-pagination-btn"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((page) => page - 1)}
+                  >
+                    上一页
+                  </button>
+                  <div className="history-pagination-pages">
+                    {Array.from({ length: totalPages }, (_, index) => {
+                      const page = index + 1;
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          className={
+                            page === currentPage
+                              ? "history-pagination-page is-current"
+                              : "history-pagination-page"
+                          }
+                          aria-current={page === currentPage ? "page" : undefined}
+                          aria-label={`第 ${page} 页`}
+                          onClick={() => setCurrentPage(page)}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="history-pagination-summary">
+                    第 {currentPage} / {totalPages} 页，共 {filteredDisplayItems.length} 条
+                  </span>
+                  <button
+                    type="button"
+                    className="history-pagination-btn"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((page) => page + 1)}
+                  >
+                    下一页
+                  </button>
+                </nav>
+              )}
+            </>
           )}
         </div>
 
