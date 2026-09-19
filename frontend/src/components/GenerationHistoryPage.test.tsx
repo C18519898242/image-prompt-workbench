@@ -580,6 +580,38 @@ test("opens fullscreen lightbox from detail image", async () => {
   });
 });
 
+test("fullscreen next navigates across pages with a global image counter", async () => {
+  const histories = Array.from({ length: 17 }, (_, index) => ({
+    ...itemA,
+    id: index + 1,
+    title: `跨页记录 ${index + 1} ${itemA.created_at + index}`,
+    image_path: `generated-images/${index + 1}.png`,
+    url: `/media/generated-images/${index + 1}.png`,
+    created_at: itemA.created_at + index,
+  }));
+  mockHistoryApis({ histories });
+  const user = userEvent.setup();
+  renderHistory();
+
+  await user.click(
+    await screen.findByRole("button", { name: "查看 跨页记录 2" }),
+  );
+  await user.click(screen.getByRole("button", { name: "全屏预览" }));
+
+  let lightbox = screen.getByRole("dialog", { name: "大图预览" });
+  expect(within(lightbox).getByText("16/17")).toBeInTheDocument();
+
+  await user.click(within(lightbox).getByRole("button", { name: "下一张" }));
+
+  lightbox = screen.getByRole("dialog", { name: "大图预览" });
+  expect(within(lightbox).getByText("17/17")).toBeInTheDocument();
+  expect(lightbox.querySelector("img")).toHaveAttribute(
+    "src",
+    "/media/generated-images/1.png",
+  );
+  expect(screen.getByText("第 2 / 2 页，共 17 条")).toBeInTheDocument();
+});
+
 test("downloads current image from lightbox top bar", async () => {
   mockHistoryApis();
   const user = userEvent.setup();

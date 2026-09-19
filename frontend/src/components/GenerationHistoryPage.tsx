@@ -317,12 +317,12 @@ export function GenerationHistoryPage({
     setCurrentPage((page) => Math.min(page, totalPages));
   }, [totalPages]);
 
-  const visibleCompletedItems = useMemo(
+  const filteredCompletedItems = useMemo(
     () =>
-      visibleDisplayItems.flatMap((entry) =>
+      filteredDisplayItems.flatMap((entry) =>
         entry.status === "completed" && entry.history ? [entry.history] : [],
       ),
-    [visibleDisplayItems],
+    [filteredDisplayItems],
   );
 
   const modelOptions = useMemo(() => {
@@ -341,22 +341,22 @@ export function GenerationHistoryPage({
     if (selectedId == null) {
       return -1;
     }
-    return visibleCompletedItems.findIndex((item) => item.id === selectedId);
-  }, [selectedId, visibleCompletedItems]);
+    return filteredCompletedItems.findIndex((item) => item.id === selectedId);
+  }, [selectedId, filteredCompletedItems]);
 
   const selectedItem =
-    selectedIndex >= 0 ? visibleCompletedItems[selectedIndex] : null;
+    selectedIndex >= 0 ? filteredCompletedItems[selectedIndex] : null;
 
   useEffect(() => {
     if (selectedId == null) {
       setLightboxOpen(false);
       return;
     }
-    if (!visibleCompletedItems.some((item) => item.id === selectedId)) {
+    if (!filteredCompletedItems.some((item) => item.id === selectedId)) {
       setSelectedId(null);
       setLightboxOpen(false);
     }
-  }, [selectedId, visibleCompletedItems]);
+  }, [selectedId, filteredCompletedItems]);
 
   const markImageFailed = (id: number) => {
     setFailedImages((current) =>
@@ -365,6 +365,12 @@ export function GenerationHistoryPage({
   };
 
   const selectHistoryItem = (id: number) => {
+    const displayIndex = filteredDisplayItems.findIndex(
+      (entry) => entry.history?.id === id,
+    );
+    if (displayIndex >= 0) {
+      setCurrentPage(Math.floor(displayIndex / HISTORY_PAGE_SIZE) + 1);
+    }
     setSelectedId(id);
     setActionError(null);
   };
@@ -722,7 +728,7 @@ export function GenerationHistoryPage({
                   className="history-detail-nav-btn"
                   disabled={selectedIndex <= 0}
                   onClick={() => {
-                    const prev = visibleCompletedItems[selectedIndex - 1];
+                    const prev = filteredCompletedItems[selectedIndex - 1];
                     if (prev) {
                       selectHistoryItem(prev.id);
                     }
@@ -732,16 +738,16 @@ export function GenerationHistoryPage({
                   ‹
                 </button>
                 <span className="history-detail-counter">
-                  {selectedIndex + 1} / {visibleCompletedItems.length}
+                  {selectedIndex + 1} / {filteredCompletedItems.length}
                 </span>
                 <button
                   type="button"
                   className="history-detail-nav-btn"
                   disabled={
-                    selectedIndex >= visibleCompletedItems.length - 1
+                    selectedIndex >= filteredCompletedItems.length - 1
                   }
                   onClick={() => {
-                    const next = visibleCompletedItems[selectedIndex + 1];
+                    const next = filteredCompletedItems[selectedIndex + 1];
                     if (next) {
                       selectHistoryItem(next.id);
                     }
@@ -840,7 +846,7 @@ export function GenerationHistoryPage({
         <ImageLightbox
           title={displayHistoryTitle(selectedItem)}
           currentIndex={selectedIndex + 1}
-          total={visibleCompletedItems.length}
+          total={filteredCompletedItems.length}
           imageUrl={
             failedImages[selectedItem.id] ? null : selectedItem.url
           }
@@ -849,13 +855,13 @@ export function GenerationHistoryPage({
           onClose={() => setLightboxOpen(false)}
           onDownload={() => downloadHistoryImage(selectedItem)}
           onPrev={() => {
-            const prev = visibleCompletedItems[selectedIndex - 1];
+            const prev = filteredCompletedItems[selectedIndex - 1];
             if (prev) {
               selectHistoryItem(prev.id);
             }
           }}
           onNext={() => {
-            const next = visibleCompletedItems[selectedIndex + 1];
+            const next = filteredCompletedItems[selectedIndex + 1];
             if (next) {
               selectHistoryItem(next.id);
             }
