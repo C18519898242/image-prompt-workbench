@@ -13,6 +13,33 @@ import type { SessionGenerationCard } from "../generation";
 import { ImageLightbox } from "./ImageLightbox";
 
 const HISTORY_PAGE_SIZE = 16;
+type HistoryPaginationItem = number | "ellipsis-start" | "ellipsis-end";
+
+function buildHistoryPaginationItems(
+  totalPages: number,
+  currentPage: number,
+): HistoryPaginationItem[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+  if (currentPage <= 5) {
+    return [1, 2, 3, 4, 5, "ellipsis-end", totalPages];
+  }
+  if (currentPage >= totalPages - 4) {
+    return [
+      1,
+      "ellipsis-start",
+      ...Array.from({ length: 5 }, (_, index) => totalPages - 4 + index),
+    ];
+  }
+  return [
+    1,
+    "ellipsis-start",
+    ...Array.from({ length: 5 }, (_, index) => currentPage - 2 + index),
+    "ellipsis-end",
+    totalPages,
+  ];
+}
 
 export type HistoryFilters = {
   query: string;
@@ -275,6 +302,7 @@ export function GenerationHistoryPage({
     1,
     Math.ceil(filteredDisplayItems.length / HISTORY_PAGE_SIZE),
   );
+  const paginationItems = buildHistoryPaginationItems(totalPages, currentPage);
 
   const visibleDisplayItems = useMemo(() => {
     const start = (currentPage - 1) * HISTORY_PAGE_SIZE;
@@ -629,8 +657,19 @@ export function GenerationHistoryPage({
                     上一页
                   </button>
                   <div className="history-pagination-pages">
-                    {Array.from({ length: totalPages }, (_, index) => {
-                      const page = index + 1;
+                    {paginationItems.map((item) => {
+                      if (typeof item !== "number") {
+                        return (
+                          <span
+                            key={item}
+                            className="history-pagination-ellipsis"
+                            aria-hidden="true"
+                          >
+                            …
+                          </span>
+                        );
+                      }
+                      const page = item;
                       return (
                         <button
                           key={page}

@@ -395,6 +395,45 @@ test("changing a history filter returns pagination to the first page", async () 
   expect(screen.getByText("第 1 / 2 页，共 17 条")).toBeInTheDocument();
 });
 
+test("pagination condenses distant page numbers with ellipses", async () => {
+  const histories = Array.from({ length: 327 }, (_, index) => ({
+    ...itemA,
+    id: index + 1,
+    title: `分页记录 ${index + 1} ${itemA.created_at + index}`,
+    image_path: `generated-images/${index + 1}.png`,
+    url: `/media/generated-images/${index + 1}.png`,
+    created_at: itemA.created_at + index,
+  }));
+  mockHistoryApis({ histories });
+  const user = userEvent.setup();
+
+  renderHistory();
+  const pagination = await screen.findByRole("navigation", { name: "历史分页" });
+  const pager = within(pagination);
+
+  expect(pager.getAllByText("…")).toHaveLength(1);
+  expect(pager.getByRole("button", { name: "第 5 页" })).toBeInTheDocument();
+  expect(pager.queryByRole("button", { name: "第 6 页" })).not.toBeInTheDocument();
+  expect(pager.getByRole("button", { name: "第 21 页" })).toBeInTheDocument();
+
+  for (let page = 1; page < 10; page += 1) {
+    await user.click(pager.getByRole("button", { name: "下一页" }));
+  }
+  expect(pager.getAllByText("…")).toHaveLength(2);
+  expect(pager.getByRole("button", { name: "第 8 页" })).toBeInTheDocument();
+  expect(pager.getByRole("button", { name: "第 12 页" })).toBeInTheDocument();
+  expect(pager.queryByRole("button", { name: "第 7 页" })).not.toBeInTheDocument();
+  expect(pager.queryByRole("button", { name: "第 13 页" })).not.toBeInTheDocument();
+
+  for (let page = 10; page < 20; page += 1) {
+    await user.click(pager.getByRole("button", { name: "下一页" }));
+  }
+  expect(pager.getAllByText("…")).toHaveLength(1);
+  expect(pager.getByRole("button", { name: "第 17 页" })).toBeInTheDocument();
+  expect(pager.queryByRole("button", { name: "第 16 页" })).not.toBeInTheDocument();
+  expect(pager.getByRole("button", { name: "第 21 页" })).toBeInTheDocument();
+});
+
 test("filters gallery by search query", async () => {
   mockHistoryApis();
 
